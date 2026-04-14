@@ -2,8 +2,6 @@
 
 An interactive analytics dashboard for Pakistan Super League (PSL) cricket data, built with Python, Flask, and Plotly.js.
 
-![PSL Logo](static/psl_logo.png)
-
 ## Features
 
 - **Batting** — Top run scorers, strike rate leaders, average vs strike rate bubble chart
