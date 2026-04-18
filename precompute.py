@@ -1,17 +1,42 @@
 """
-Run this once before pushing to GitHub to export all static JSON files.
-    python precompute.py
-Outputs go to static/data/ — commit that folder alongside index.html.
+Precompute static JSON for every supported competition.
+
+Output layout:
+    static/data/competitions.json              manifest
+    static/data/{comp}/<endpoint>.json          career view
+    static/data/{comp}/<endpoint>-{season}.json per season
+    static/data/{comp}/players.json             search list
+
+Run this once before pushing to GitHub. The Flask app can serve everything
+dynamically; this file powers the static GitHub Pages build.
+
+    python precompute.py             # everything
+    python precompute.py ipl psl     # only named competitions
 """
 import json
 import os
+import sys
 import numpy as np
 from CricketAnalyser import PSLAnalyzer
 
-OUT = os.path.join('static', 'data')
-os.makedirs(OUT, exist_ok=True)
+ROOT = os.path.join('static', 'data')
+os.makedirs(ROOT, exist_ok=True)
 
-analyzer = PSLAnalyzer('data/psl.csv')
+COMP_NAMES = {
+    'psl':   'Pakistan Super League',
+    'ipl':   'Indian Premier League',
+    'bbl':   'Big Bash League',
+    'cpl':   'Caribbean Premier League',
+    'ntb':   'Vitality Blast',
+    'hnd':   'The Hundred',
+    'sa20':  'SA20',
+    'ilt':   'International League T20',
+    'mlc':   'Major League Cricket',
+    'lpl':   'Lanka Premier League',
+    'bpl':   'Bangladesh Premier League',
+    't20is': 'Men’s T20 Internationals',
+    'wc':    'T20 World Cups',
+}
 
 
 def _clean(obj):
@@ -33,48 +58,104 @@ def serialize(df):
     return [_clean(r) for r in records]
 
 
-def save(name, data):
-    path = os.path.join(OUT, f'{name}.json')
-    with open(path, 'w') as f:
+def save(path, data):
+    full = os.path.join(ROOT, path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, 'w') as f:
         json.dump(data, f, separators=(',', ':'))
-    print(f'  wrote {path}')
+    print(f'  wrote {full}')
 
 
-print('Generating static JSON files...')
+def build_comp(a: PSLAnalyzer, code: str):
+    dir_ = code
+    print(f'\n── {code} ──')
+    # Career views
+    save(f'{dir_}/batting.json',
+         serialize(a.batting_averages(min_innings=10, min_runs=200, competition=code)))
+    save(f'{dir_}/strike-rates.json',
+         serialize(a.strike_rate_analysis(min_balls=150, min_runs=200, competition=code)))
+    save(f'{dir_}/bowling.json',
+         serialize(a.bowling_stats(min_balls=30, min_wickets=10, competition=code)))
+    save(f'{dir_}/teams.json',
+         serialize(a.team_performance(competition=code)))
+    save(f'{dir_}/highest-scores.json',
+         serialize(a.highest_scores(top_n=15, competition=code)))
+    save(f'{dir_}/dismissals.json',
+         serialize(a.dismissal_analysis(competition=code)))
+    save(f'{dir_}/over-heatmap.json',
+         _clean(a.over_heatmap(competition=code)))
+    save(f'{dir_}/phase-stats.json',
+         _clean(a.phase_stats(competition=code)))
+    try:
+        save(f'{dir_}/matchup.json',
+             _clean(a.matchup_heatmap(competition=code)))
+    except Exception as e:
+        print(f'  (matchup skipped: {e})')
 
-save('batting',       serialize(analyzer.batting_averages(min_innings=10, min_runs=200)))
-save('strike-rates',  serialize(analyzer.strike_rate_analysis(min_balls=150, min_runs=200)))
-save('bowling',       serialize(analyzer.bowling_stats(min_balls=30, min_wickets=10)))
-save('teams',         serialize(analyzer.team_performance()))
-save('highest-scores',serialize(analyzer.highest_scores(top_n=15)))
-save('dismissals',    serialize(analyzer.dismissal_analysis()))
-save('players',       sorted(
-    set(analyzer.df['batter'].dropna().unique()) |
-    set(analyzer.df['bowler'].dropna().unique())
-))
-save('over-heatmap',  _clean(analyzer.over_heatmap()))
-save('phase-stats',   _clean(analyzer.phase_stats()))
-save('matchup',       _clean(analyzer.matchup_heatmap()))
-save('cais-batting',  serialize(analyzer.cais_batting(min_balls=50, min_runs=200)))
-save('cais-bowling',  serialize(analyzer.cais_bowling(min_balls=30, min_wickets=10)))
+    save(f'{dir_}/cais-batting.json',
+         serialize(a.cais_batting(min_balls=50, min_runs=200, competition=code)))
+    save(f'{dir_}/cais-bowling.json',
+         serialize(a.cais_bowling(min_balls=30, min_wickets=10, competition=code)))
 
-# Per-season files (for static site filtering)
-seasons = sorted(analyzer.df['season'].dropna().unique().tolist())
-for s in seasons:
-    si = int(s)
-    save(f'cais-batting-{si}', serialize(analyzer.cais_batting(min_balls=20, season=si, min_runs=200)))
-    save(f'cais-bowling-{si}', serialize(analyzer.cais_bowling(min_balls=12, season=si, min_wickets=10)))
-    save(f'batting-{si}',      serialize(analyzer.batting_averages(min_innings=3, season=si, min_runs=200)))
-    save(f'strike-rates-{si}', serialize(analyzer.strike_rate_analysis(min_balls=50, season=si, min_runs=200)))
-    save(f'bowling-{si}',      serialize(analyzer.bowling_stats(min_balls=12, season=si, min_wickets=10)))
-save('seasons', [int(s) for s in seasons])
+    # Centuries count per batter
+    cent = a.century_makers(competition=code)
+    counts = (cent.groupby('batter').size()
+                   .reset_index(name='centuries')
+                   .sort_values('centuries', ascending=False).head(15))
+    save(f'{dir_}/centuries.json', serialize(counts))
 
-centuries_df = analyzer.century_makers()
-counts = (centuries_df.groupby('batter').size()
-            .reset_index(name='centuries')
-            .sort_values('centuries', ascending=False)
-            .head(15))
-save('centuries', serialize(counts))
+    # Players list for search
+    df = a.df[a.df['competition'] == code]
+    batters = set(df['batter'].dropna().unique())
+    bowlers = set(df['bowler'].dropna().unique())
+    save(f'{dir_}/players.json', sorted(batters | bowlers))
 
-print(f'\nDone — {len(os.listdir(OUT))} files in {OUT}/')
-print('Commit the static/ folder and push to GitHub.')
+    # Per-season variants
+    seasons = sorted(df['season'].dropna().unique().tolist())
+    save(f'{dir_}/seasons.json', [int(s) for s in seasons])
+    for s in seasons:
+        si = int(s)
+        try:
+            save(f'{dir_}/cais-batting-{si}.json',
+                 serialize(a.cais_batting(min_balls=20, min_runs=200, season=si, competition=code)))
+            save(f'{dir_}/cais-bowling-{si}.json',
+                 serialize(a.cais_bowling(min_balls=12, min_wickets=10, season=si, competition=code)))
+            save(f'{dir_}/batting-{si}.json',
+                 serialize(a.batting_averages(min_innings=3, min_runs=200, season=si, competition=code)))
+            save(f'{dir_}/strike-rates-{si}.json',
+                 serialize(a.strike_rate_analysis(min_balls=50, min_runs=200, season=si, competition=code)))
+            save(f'{dir_}/bowling-{si}.json',
+                 serialize(a.bowling_stats(min_balls=12, min_wickets=10, season=si, competition=code)))
+        except Exception as e:
+            print(f'  season {si} skipped: {e}')
+
+
+def main(codes):
+    analyzer = PSLAnalyzer('data/all.csv')
+    available = sorted(analyzer.df['competition'].unique().tolist())
+    if not codes:
+        codes = [c for c in COMP_NAMES if c in available]
+
+    manifest = []
+    for code in codes:
+        if code not in available:
+            print(f'skip {code}: no data')
+            continue
+        sub = analyzer.df[analyzer.df['competition'] == code]
+        seasons = sorted(sub['season'].dropna().unique().tolist())
+        manifest.append({
+            'code': code,
+            'name': COMP_NAMES.get(code, code.upper()),
+            'matches': int(sub['match_id'].nunique()),
+            'rows': int(len(sub)),
+            'first_season': int(seasons[0]) if seasons else None,
+            'last_season':  int(seasons[-1]) if seasons else None,
+        })
+        build_comp(analyzer, code)
+
+    save('competitions.json', manifest)
+    print(f'\n✅ Done — manifest covers {len(manifest)} competitions')
+
+
+if __name__ == '__main__':
+    main(sys.argv[1:])

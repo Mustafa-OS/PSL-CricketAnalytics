@@ -3,3 +3,12 @@ __pycache__/
 .DS_Store
 *.egg-info/
 .env
+
+# Raw Cricsheet downloads — regenerate with `python ingest.py`
+data/raw/
+
+# Per-competition and combined CSVs — too large for git; regenerated from zips
+data/*.csv
+
+# Word doc backup
+~$*.docx

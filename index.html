@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PSL Insights — CAIS Analytics</title>
+  <title>Context XI — T20 Cricket Analytics</title>
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -80,6 +80,71 @@
       letter-spacing: -0.01em;
     }
     .brand-wordmark span { color: var(--accent); }
+
+    /* comp badge in top bar */
+    .comp-badge {
+      margin-left: 4px;
+      padding: 4px 10px;
+      font-size: 11.5px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--accent-hi);
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .comp-badge:hover {
+      background: rgba(251, 191, 36, 0.2);
+      border-color: var(--accent);
+    }
+
+    /* comp picker grid on home */
+    .comp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+      margin: 20px 0;
+    }
+    .comp-card {
+      background: var(--bg-2);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      cursor: pointer;
+      transition: all .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .comp-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, transparent 60%, rgba(251,191,36,0.08));
+      opacity: 0; transition: opacity .2s;
+    }
+    .comp-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .comp-card:hover::before { opacity: 1; }
+    .comp-card.active {
+      border-color: var(--accent);
+      background: linear-gradient(135deg, var(--bg-2), rgba(251,191,36,0.08));
+    }
+    .comp-card.active::after {
+      content: '✓'; position: absolute; top: 10px; right: 14px;
+      color: var(--accent); font-weight: 700; font-size: 16px;
+    }
+    .comp-card-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700; font-size: 15.5px;
+      color: var(--text); margin-bottom: 4px;
+      position: relative;
+    }
+    .comp-card-meta {
+      font-size: 12px; color: var(--text-soft);
+      position: relative;
+    }
+    .comp-card-meta .dot { opacity: 0.4; margin: 0 6px; }
 
     /* nav */
     .topnav {
@@ -650,9 +715,8 @@
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand" data-view="home">
-      <img src="static/psl_logo.png" alt="PSL" class="brand-logo"
-           onerror="this.style.display='none'">
-      <div class="brand-wordmark">PSL <span>Insights</span></div>
+      <div class="brand-wordmark">⚡ Context <span>XI</span></div>
+      <button id="comp-badge" class="comp-badge" title="Change competition">PSL</button>
     </div>
 
     <nav class="topnav">
@@ -682,26 +746,28 @@
   <section id="view-home" class="view active">
 
     <div class="hero">
-      <img src="static/psl_logo.png" alt="PSL" class="hero-logo"
-           onerror="this.style.display='none'">
-      <h1 class="hero-title">Cricket's <span class="accent">hidden context</span>,<br>
-        now measurable.</h1>
+      <h1 class="hero-title">All T20 cricket,<br>
+        seen through <span class="accent">context</span>.</h1>
       <p class="hero-sub">
-        PSL Insights goes beyond raw averages. The flagship <strong>CAIS</strong>
-        metric weights every ball by phase, bowler type, batter quality,
-        form, and pressure — so a wicket in the powerplay against a top batter
-        counts for more than a middle-over wicket against a tailender.
+        Pick a competition — every major T20 league, every men's T20 international,
+        and every T20 World Cup. The flagship <strong>CAIS</strong> metric weights every
+        ball by phase, bowler type, batter quality, form and pressure.
       </p>
-      <div class="hero-cta">
-        <button class="btn btn-primary" data-view="cais">
-          ⚡ Explore CAIS
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-          </svg>
-        </button>
-        <button class="btn btn-secondary" data-view="batting">Browse Stats</button>
-      </div>
+    </div>
+
+    <h2 class="section-title">Pick a competition</h2>
+    <p class="section-sub">Your choice persists across tabs. Change it any time from the badge in the top bar.</p>
+    <div id="comp-grid" class="comp-grid"></div>
+
+    <div id="comp-cta" class="hero-cta" style="justify-content:center;margin-top:32px">
+      <button class="btn btn-primary" data-view="cais">
+        ⚡ Explore CAIS in <span id="cta-comp-name">PSL</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+        </svg>
+      </button>
+      <button class="btn btn-secondary" data-view="batting">Browse Stats</button>
     </div>
 
     <h2 class="section-title">What's inside</h2>
@@ -1136,8 +1202,16 @@ const CFG = { responsive: true, displayModeBar: false };
 
 /* ── API helper — works Flask + static ──────────────────── */
 const FLASK = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+/* Current competition (global) — persisted in localStorage. */
+const APP = {
+  get comp() { return localStorage.getItem('comp') || 'psl'; },
+  set comp(v) { localStorage.setItem('comp', v); },
+};
+
 async function apiGet(ep, query = {}) {
-  const qs = new URLSearchParams(Object.entries(query).filter(([,v]) => v !== null && v !== '' && v !== undefined)).toString();
+  const q = { ...query, competition: APP.comp };
+  const qs = new URLSearchParams(Object.entries(q).filter(([,v]) => v !== null && v !== '' && v !== undefined)).toString();
   if (FLASK) {
     try {
       const url = `/api/${ep}${qs ? '?' + qs : ''}`;
@@ -1145,10 +1219,10 @@ async function apiGet(ep, query = {}) {
       if (r.ok) return await r.json();
     } catch(_) {}
   }
-  // static fallback: use season-suffixed file if applicable
+  // static fallback: nested per-competition path
   let file = ep.replace(/\//g, '-');
   if (query.season) file = `${file}-${query.season}`;
-  return fetch(`static/data/${file}.json`).then(r => r.json());
+  return fetch(`static/data/${APP.comp}/${file}.json`).then(r => r.json());
 }
 
 /* ── View router ────────────────────────────────────────── */
@@ -1234,10 +1308,12 @@ function scatter(elId, rows, xKey, yKey, sizeKey, labelKey, opts = {}) {
 let SEASONS = [];
 async function loadSeasons() {
   try {
-    SEASONS = await fetch('static/data/seasons.json').then(r => r.json());
-  } catch(_) {
-    SEASONS = [2016,2017,2018,2019,2020,2021,2022,2023,2024];
-  }
+    if (FLASK) {
+      SEASONS = await fetch(`/api/seasons?competition=${APP.comp}`).then(r => r.json());
+    } else {
+      SEASONS = await fetch(`static/data/${APP.comp}/seasons.json`).then(r => r.json());
+    }
+  } catch(_) { SEASONS = []; }
 }
 function buildSeasonChips(containerId, onChange, initial = '') {
   const el = document.getElementById(containerId);
@@ -1258,8 +1334,13 @@ function buildSeasonChips(containerId, onChange, initial = '') {
   SEASONS.forEach(s => mkChip(s, s));
 }
 
-const TEAMS = ['Islamabad United','Karachi Kings','Lahore Qalandars',
-               'Multan Sultans','Peshawar Zalmi','Quetta Gladiators'];
+let TEAMS = [];
+async function loadTeams() {
+  try {
+    const t = await apiGet('teams');
+    TEAMS = t.map(r => r.team).filter(Boolean);
+  } catch(_) { TEAMS = []; }
+}
 
 /* ══════════════════════════════════════════════════════════
    CAIS  (the main event)
@@ -1471,12 +1552,13 @@ function showCaisPanel(kind) {
 
 async function loadCais() {
   await loadSeasons();
+  await loadTeams();
   buildSeasonChips('cais-season-chips', async (s) => {
     caisState.season = s;
     caisState.data = { batting: null, bowling: null };
     await renderCais();
   });
-  // team chips
+  // team chips (dynamic, per-competition)
   const tel = document.getElementById('cais-team-chips');
   tel.innerHTML = '<button class="chip active" data-team="">All</button>' +
     TEAMS.map(t => `<button class="chip" data-team="${t}">${t.split(' ')[0]}</button>`).join('');
@@ -1834,16 +1916,91 @@ document.addEventListener('keydown', e => {
    INIT
    ══════════════════════════════════════════════════════════ */
 const LOADERS = {
-  home:     () => {},
+  home:     loadHome,
   cais:     loadCais,
   batting:  loadBatting,
   bowling:  loadBowling,
   records:  loadRecords,
 };
 
-// home is active by default; preload player list so search is instant
-loadPlayersList();
-loaded['home'] = true;
+/* ── Competition picker ─────────────────────────────────── */
+let COMPS_MANIFEST = [];
+
+async function loadCompetitions() {
+  try {
+    if (FLASK) {
+      COMPS_MANIFEST = await fetch('/api/competitions').then(r => r.json());
+    } else {
+      COMPS_MANIFEST = await fetch('static/data/competitions.json').then(r => r.json());
+    }
+  } catch(_) { COMPS_MANIFEST = []; }
+}
+
+function renderCompGrid() {
+  const el = document.getElementById('comp-grid');
+  if (!el) return;
+  el.innerHTML = COMPS_MANIFEST.map(c => `
+    <div class="comp-card ${c.code === APP.comp ? 'active' : ''}" data-comp="${c.code}">
+      <div class="comp-card-name">${c.name}</div>
+      <div class="comp-card-meta">
+        ${c.matches.toLocaleString()} matches
+        <span class="dot">•</span>
+        ${c.first_season}${c.last_season !== c.first_season ? '–' + c.last_season : ''}
+      </div>
+    </div>
+  `).join('');
+  el.querySelectorAll('.comp-card').forEach(card => {
+    card.onclick = () => selectComp(card.dataset.comp);
+  });
+}
+
+function updateCompBadge() {
+  const c = COMPS_MANIFEST.find(x => x.code === APP.comp);
+  const label = c ? c.code.toUpperCase() : APP.comp.toUpperCase();
+  document.getElementById('comp-badge').textContent = label;
+  const cta = document.getElementById('cta-comp-name');
+  if (cta) cta.textContent = c ? c.name : APP.comp.toUpperCase();
+}
+
+async function selectComp(code) {
+  if (code === APP.comp) return;
+  APP.comp = code;
+  // Wipe caches of dependent views and reload whichever is active.
+  for (const k of Object.keys(loaded)) loaded[k] = false;
+  loaded.home = true;
+  caisState.season = '';
+  caisState.team = '';
+  caisState.data = { batting: null, bowling: null };
+  battingState.season = '';
+  bowlingState.season = '';
+  PLAYERS = [];
+  renderCompGrid();
+  updateCompBadge();
+  // Refresh current view
+  const active = document.querySelector('.view.active');
+  const current = active ? active.id.replace('view-', '') : 'home';
+  if (LOADERS[current]) { await LOADERS[current](); loaded[current] = true; }
+}
+
+async function loadHome() {
+  await loadCompetitions();
+  renderCompGrid();
+  updateCompBadge();
+}
+
+// Badge in topbar → go home (to change competition)
+document.getElementById('comp-badge').onclick = (e) => {
+  e.stopPropagation();
+  showView('home');
+};
+
+(async () => {
+  await loadCompetitions();
+  renderCompGrid();
+  updateCompBadge();
+  loadPlayersList();
+  loaded['home'] = true;
+})();
 </script>
 
 </body>
