@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 from urllib.parse import unquote
 import numpy as np
 import pandas as pd
@@ -40,17 +40,23 @@ def index():
 
 @app.route('/api/batting')
 def batting():
-    return jsonify(serialize(analyzer.batting_averages(min_innings=10).head(20)))
+    season = request.args.get('season', type=int)
+    mi = 10 if season is None else 3
+    return jsonify(serialize(analyzer.batting_averages(min_innings=mi, season=season).head(25)))
 
 
 @app.route('/api/strike-rates')
 def strike_rates():
-    return jsonify(serialize(analyzer.strike_rate_analysis(min_balls=150).head(20)))
+    season = request.args.get('season', type=int)
+    mb = 150 if season is None else 50
+    return jsonify(serialize(analyzer.strike_rate_analysis(min_balls=mb, season=season).head(25)))
 
 
 @app.route('/api/bowling')
 def bowling():
-    return jsonify(serialize(analyzer.bowling_stats(min_balls=30).head(25)))
+    season = request.args.get('season', type=int)
+    mb = 30 if season is None else 12
+    return jsonify(serialize(analyzer.bowling_stats(min_balls=mb, season=season).head(30)))
 
 
 @app.route('/api/teams')
@@ -108,12 +114,16 @@ def matchup():
 
 @app.route('/api/cais/batting')
 def cais_batting():
-    return jsonify(serialize(analyzer.cais_batting(min_balls=50)))
+    season = request.args.get('season', type=int)
+    min_balls = request.args.get('min_balls', default=50, type=int)
+    return jsonify(serialize(analyzer.cais_batting(min_balls=min_balls, season=season)))
 
 
 @app.route('/api/cais/bowling')
 def cais_bowling():
-    return jsonify(serialize(analyzer.cais_bowling(min_balls=30)))
+    season = request.args.get('season', type=int)
+    min_balls = request.args.get('min_balls', default=30, type=int)
+    return jsonify(serialize(analyzer.cais_bowling(min_balls=min_balls, season=season)))
 
 
 if __name__ == '__main__':

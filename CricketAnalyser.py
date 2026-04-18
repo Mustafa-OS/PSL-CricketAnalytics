@@ -12,26 +12,33 @@ class PSLAnalyzer:
         self.df = pd.read_csv(csv_path)
         self.legal = self.df[self.df["extras_type"] != 'wides'].copy()
         
-    def batting_averages(self, min_innings=5):
+    def _scope(self, season=None):
+        """Return a legal-deliveries DataFrame optionally filtered to one season."""
+        if season is None:
+            return self.legal
+        return self.legal[self.legal['season'] == int(season)]
+
+    def batting_averages(self, min_innings=5, season=None):
         """Calculate batting averages and aggregate stats"""
-        innings = self.legal.groupby(['batter', 'match_id', 'batting_team'])['batsman_runs'].sum().reset_index()
+        legal = self._scope(season)
+        innings = legal.groupby(['batter', 'match_id', 'batting_team'])['batsman_runs'].sum().reset_index()
         innings.columns = ['batter', 'match_id', 'batting_team', 'runs']
-        
-        stats = self.legal.groupby('batter').agg({
+
+        stats = legal.groupby('batter').agg({
             'batsman_runs': 'sum',
             'match_id': 'nunique',
             'is_wicket': 'sum'
         }).reset_index()
         stats.columns = ['batter', 'total_runs', 'matches', 'dismissals']
-        
+
         stats['average'] = stats.apply(
             lambda r: round(r['total_runs'] / r['dismissals'], 2) if r['dismissals'] > 0 else np.inf,
             axis=1
         )
-        balls_faced = self.legal.groupby('batter').size().rename('balls_faced')
+        balls_faced = legal.groupby('batter').size().rename('balls_faced')
         stats = stats.merge(balls_faced, on='batter', how='left')
         stats['SR'] = (stats['total_runs'] / stats['balls_faced'] * 100).round(2)
-        
+
         return stats[stats['matches'] >= min_innings].sort_values('total_runs', ascending=False)
     
     def highest_scores(self, top_n=20):
@@ -42,9 +49,10 @@ class PSLAnalyzer:
         highest = innings.nlargest(top_n, 'runs')[['batter', 'batting_team', 'date', 'runs']]
         return highest.reset_index(drop=True)
     
-    def bowling_stats(self, min_balls=30):
+    def bowling_stats(self, min_balls=30, season=None):
         """Calculate bowling statistics"""
-        legal_balls = self.legal[self.legal['bowler'].notna()]
+        legal = self._scope(season)
+        legal_balls = legal[legal['bowler'].notna()]
         
         stats = legal_balls.groupby('bowler').agg({
             'total_runs': 'sum',
@@ -59,9 +67,10 @@ class PSLAnalyzer:
         
         return stats[stats['balls'] >= min_balls].sort_values('wickets', ascending=False)
     
-    def strike_rate_analysis(self, min_balls=100):
+    def strike_rate_analysis(self, min_balls=100, season=None):
         """Analyze strike rates for batters"""
-        batter_data = self.legal.groupby('batter').agg({
+        legal = self._scope(season)
+        batter_data = legal.groupby('batter').agg({
             'batsman_runs': 'sum',
             'id': 'count',
             'match_id': 'nunique'
@@ -417,12 +426,14 @@ class PSLAnalyzer:
         self._enriched = data
         return data
 
-    def cais_batting(self, min_balls=50):
+    def cais_batting(self, min_balls=50, season=None):
         """
         Context-Adjusted Impact Score — Batting.
-        CAIS = Σ(runs × phase_weight × pressure) / balls × 100
+        CAIS = Σ(runs × phase_weight × pressure) / balls × 100 × form_avg
         """
         data = self._build_enriched()
+        if season is not None:
+            data = data[data['season'] == int(season)]
         form_map = self._batter_form_scores()
 
         rows = []
@@ -432,15 +443,18 @@ class PSLAnalyzer:
             weighted_runs = (grp['batsman_runs']
                              * grp['phase_bat_weight']
                              * grp['pressure']).sum()
-            # Apply average form multiplier across career
             form_avg = np.mean([form_map.get((batter, mid), 1.0)
                                 for mid in grp['match_id'].unique()])
             cais = weighted_runs / len(grp) * 100 * form_avg
             raw_sr = grp['batsman_runs'].sum() / len(grp) * 100
+            primary_team = (grp['batting_team'].value_counts().index[0]
+                            if len(grp['batting_team'].dropna()) else None)
             rows.append({
                 'batter': batter,
+                'team': primary_team,
                 'cais': round(float(cais), 2),
                 'raw_sr': round(float(raw_sr), 2),
+                'runs': int(grp['batsman_runs'].sum()),
                 'balls': int(len(grp)),
                 'matches': int(grp['match_id'].nunique()),
             })
@@ -449,7 +463,7 @@ class PSLAnalyzer:
         df['rank'] = df.index + 1
         return df
 
-    def cais_bowling(self, min_balls=30):
+    def cais_bowling(self, min_balls=30, season=None):
         """
         Context-Adjusted Impact Score — Bowling.
         Wicket value  = 30 × phase_role_mult × batter_tier × form_mult × pressure
@@ -457,6 +471,8 @@ class PSLAnalyzer:
         CAIS          = Σ(ball_score) / overs
         """
         data = self._build_enriched()
+        if season is not None:
+            data = data[data['season'] == int(season)]
         roles      = self._infer_bowler_roles()
         tiers      = self._batter_tiers()
         form_map   = self._batter_form_scores()
@@ -492,11 +508,15 @@ class PSLAnalyzer:
                 total_score += wicket_val - run_cost
 
             overs = len(grp) / 6
+            primary_team = (grp['bowling_team'].value_counts().index[0]
+                            if len(grp['bowling_team'].dropna()) else None)
             rows.append({
                 'bowler':   bowler,
+                'team':     primary_team,
                 'role':     role,
                 'cais':     round(float(total_score / overs), 2),
                 'wickets':  int(grp['is_wicket'].sum()),
+                'runs_conceded': int(grp['total_runs'].sum()),
                 'economy':  round(float(grp['total_runs'].sum() / overs), 2),
                 'balls':    int(len(grp)),
                 'matches':  int(grp['match_id'].nunique()),

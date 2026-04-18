@@ -58,6 +58,17 @@ save('matchup',       _clean(analyzer.matchup_heatmap()))
 save('cais-batting',  serialize(analyzer.cais_batting(min_balls=50)))
 save('cais-bowling',  serialize(analyzer.cais_bowling(min_balls=30)))
 
+# Per-season files (for static site filtering)
+seasons = sorted(analyzer.df['season'].dropna().unique().tolist())
+for s in seasons:
+    si = int(s)
+    save(f'cais-batting-{si}', serialize(analyzer.cais_batting(min_balls=20, season=si)))
+    save(f'cais-bowling-{si}', serialize(analyzer.cais_bowling(min_balls=12, season=si)))
+    save(f'batting-{si}',      serialize(analyzer.batting_averages(min_innings=3, season=si).head(25)))
+    save(f'strike-rates-{si}', serialize(analyzer.strike_rate_analysis(min_balls=50, season=si).head(25)))
+    save(f'bowling-{si}',      serialize(analyzer.bowling_stats(min_balls=12, season=si).head(30)))
+save('seasons', [int(s) for s in seasons])
+
 centuries_df = analyzer.century_makers()
 counts = (centuries_df.groupby('batter').size()
             .reset_index(name='centuries')

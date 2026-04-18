@@ -3,1103 +3,1656 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PSL Analytics Dashboard</title>
+  <title>PSL Insights — CAIS Analytics</title>
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
+    /* ══════════════════════════════════════════════════════════════════
+       PSL INSIGHTS — dark slate · amber accent · bright multi-colour charts
+       ══════════════════════════════════════════════════════════════════ */
     :root {
-      --bg:          #0c1510;
-      --surface:     #111d14;
-      --card:        #162019;
-      --card-hover:  #1c2a1f;
-      --header-bg:   #070e09;
-      --accent:      #22c55e;
-      --accent-hi:   #4ade80;
-      --accent-lo:   #166534;
-      --accent-glow: rgba(34,197,94,0.12);
-      --text:        #d4edd8;
-      --text-muted:  #6b8a70;
-      --border:      #1e3024;
-      --shadow:      0 2px 10px rgba(0,0,0,0.45);
-      --radius:      12px;
+      --bg:          #0a0e14;
+      --bg-2:        #0f141c;
+      --surface:     #141b24;
+      --card:        #1a2332;
+      --card-hi:     #21304a;
+      --border:      #263449;
+      --border-hi:   #3d5170;
+      --text:        #e6ebf3;
+      --text-soft:   #a5b2c6;
+      --text-muted:  #6a7a93;
+      --accent:      #fbbf24;    /* amber — UI chrome, active state */
+      --accent-hi:   #fcd34d;
+      --accent-glow: rgba(251,191,36,0.18);
+      --cyan:        #22d3ee;
+      --rose:        #fb7185;
+      --violet:      #a78bfa;
+      --emerald:     #34d399;
+      --orange:      #fb923c;
+      --blue:        #60a5fa;
+      --pink:        #f472b6;
+      --shadow:      0 8px 28px rgba(0,0,0,0.5);
+      --radius:      14px;
+      --radius-sm:   8px;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html, body { height: 100%; }
     body {
       font-family: 'Inter', sans-serif;
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
 
-    /* ── Header ──────────────────────────────────────────── */
-    .site-header {
-      background: var(--header-bg);
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+    /* ── Header ────────────────────────────────────────────── */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(10,14,20,0.82);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border);
-      padding: 12px 32px;
-      display: flex;
-      align-items: center;
-      gap: 0;
     }
-
-    .header-logo {
-      height: 56px;
-      width: auto;
-      object-fit: contain;
+    .topbar-inner {
+      max-width: 1400px; margin: 0 auto;
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 20px;
     }
-
-    .header-divider {
-      width: 1px;
-      height: 36px;
-      background: var(--border);
-      margin: 0 20px;
+    .brand {
+      display: flex; align-items: center; gap: 12px;
+      cursor: pointer;
+      transition: opacity .15s;
     }
+    .brand:hover { opacity: .85; }
+    .brand-logo {
+      height: 38px; width: auto; object-fit: contain;
+      filter: drop-shadow(0 2px 8px rgba(251,191,36,0.25));
+    }
+    .brand-wordmark {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700; font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+    .brand-wordmark span { color: var(--accent); }
 
-    .header-text h1 {
-      font-size: 18px;
-      font-weight: 700;
+    /* nav */
+    .topnav {
+      display: flex; gap: 4px;
+      margin-left: 8px;
+    }
+    .nav-link {
+      padding: 8px 14px;
+      font-size: 13.5px; font-weight: 500;
+      color: var(--text-soft);
+      border-radius: var(--radius-sm);
+      transition: all .15s;
+      letter-spacing: 0.01em;
+    }
+    .nav-link:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+    .nav-link.active {
+      color: var(--accent);
+      background: var(--accent-glow);
+    }
+    .nav-link.cais {
       color: var(--text);
-      letter-spacing: -0.2px;
+      background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(34,211,238,0.08));
+      border: 1px solid rgba(251,191,36,0.25);
+    }
+    .nav-link.cais.active {
+      background: linear-gradient(135deg, rgba(251,191,36,0.28), rgba(34,211,238,0.15));
+      border-color: var(--accent);
+      color: var(--accent-hi);
     }
 
-    .header-text p {
-      font-size: 11.5px;
-      color: var(--text-muted);
-      margin-top: 2px;
+    /* search */
+    .search-wrap {
+      margin-left: auto;
+      position: relative;
+      width: 320px;
     }
-
-    /* ── Tab nav ─────────────────────────────────────────── */
-    .tab-nav {
+    .search-input {
+      width: 100%;
+      padding: 9px 14px 9px 38px;
       background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text);
+      font-size: 13.5px;
+      font-family: inherit;
+      outline: none;
+      transition: all .15s;
+    }
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+      background: var(--bg-2);
+    }
+    .search-icon {
+      position: absolute; left: 13px; top: 50%;
+      transform: translateY(-50%);
+      width: 15px; height: 15px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .search-dropdown {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: var(--card);
+      border: 1px solid var(--border-hi);
+      border-radius: var(--radius-sm);
+      max-height: 320px; overflow-y: auto;
+      box-shadow: var(--shadow);
+      z-index: 100;
+    }
+    .search-dropdown.hidden { display: none; }
+    .search-result {
+      padding: 10px 14px;
+      font-size: 13px;
+      cursor: pointer;
       border-bottom: 1px solid var(--border);
-      padding: 0 32px;
-      display: flex;
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      transition: background .1s;
+    }
+    .search-result:last-child { border-bottom: none; }
+    .search-result:hover { background: var(--card-hi); color: var(--accent); }
+
+    /* ── Page container ───────────────────────────────────── */
+    .page {
+      max-width: 1400px; margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+    .page > * { animation: fadeUp .35s ease-out; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── Home / Hero ──────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding: 60px 20px 50px;
+      background:
+        radial-gradient(ellipse 900px 400px at 50% 0%, rgba(251,191,36,0.10), transparent 60%),
+        radial-gradient(ellipse 700px 300px at 30% 100%, rgba(34,211,238,0.06), transparent 60%);
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      margin-bottom: 48px;
+    }
+    .hero-logo {
+      height: 120px; width: auto;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 6px 20px rgba(251,191,36,0.3));
+    }
+    .hero-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: clamp(34px, 5vw, 52px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      margin-bottom: 18px;
+    }
+    .hero-title .accent {
+      background: linear-gradient(135deg, var(--accent), var(--cyan));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero-sub {
+      font-size: 17px; color: var(--text-soft);
+      max-width: 640px; margin: 0 auto 32px;
+      line-height: 1.55;
+    }
+    .hero-cta {
+      display: inline-flex; gap: 12px;
+    }
+    .btn {
+      padding: 11px 22px;
+      border-radius: 999px;
+      font-size: 14px; font-weight: 600;
+      transition: all .15s;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #181203;
+    }
+    .btn-primary:hover { background: var(--accent-hi); transform: translateY(-1px); box-shadow: 0 4px 14px var(--accent-glow); }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border-hi);
+    }
+    .btn-secondary:hover { background: var(--card); border-color: var(--accent); color: var(--accent); }
+
+    /* ── Section titles ───────────────────────────────────── */
+    .section-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 26px; font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+    .section-sub {
+      color: var(--text-soft); font-size: 14.5px;
+      margin-bottom: 28px;
+      max-width: 780px; line-height: 1.55;
+    }
+
+    /* ── Home feature cards ───────────────────────────────── */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+      margin-bottom: 48px;
+    }
+    .feature {
+      padding: 26px 24px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: all .2s;
+      cursor: pointer;
+    }
+    .feature:hover {
+      border-color: var(--accent);
+      background: var(--card-hi);
+      transform: translateY(-2px);
+    }
+    .feature-icon {
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--accent-glow);
+      border-radius: 10px;
+      font-size: 20px;
+      margin-bottom: 14px;
+    }
+    .feature-title {
+      font-size: 16px; font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .feature-desc {
+      font-size: 13.5px; color: var(--text-soft);
+      line-height: 1.5;
+    }
+
+    /* ── About blocks ─────────────────────────────────────── */
+    .about-block {
+      padding: 28px 32px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+    }
+    .about-block h3 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 19px; font-weight: 600;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .about-block h3::before {
+      content: ''; width: 3px; height: 18px;
+      background: var(--accent); border-radius: 2px;
+    }
+    .about-block p { color: var(--text-soft); font-size: 14.5px; line-height: 1.7; }
+    .about-block p + p { margin-top: 10px; }
+    .about-block strong { color: var(--text); font-weight: 600; }
+    .about-block code {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      padding: 1px 7px;
+      border-radius: 4px;
+      font-size: 12.5px;
+      color: var(--accent-hi);
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    /* formula box */
+    .formula {
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin: 14px 0;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 13px;
+      color: var(--accent-hi);
       overflow-x: auto;
     }
 
-    .tab-btn {
-      background: none;
-      border: none;
-      border-bottom: 3px solid transparent;
-      padding: 14px 18px;
-      font-family: inherit;
+    /* mini table */
+    .mini-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
       font-size: 13px;
-      font-weight: 500;
+    }
+    .mini-table th, .mini-table td {
+      padding: 9px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .mini-table th {
       color: var(--text-muted);
-      cursor: pointer;
-      white-space: nowrap;
-      transition: color 0.15s, border-color 0.15s;
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
     }
-    .tab-btn:hover        { color: var(--accent-hi); }
-    .tab-btn.active       { color: var(--accent); border-bottom-color: var(--accent); }
+    .mini-table td.num {
+      font-variant-numeric: tabular-nums;
+      color: var(--accent-hi);
+      font-weight: 600;
+    }
+    .mini-table .phase-pace  { color: var(--blue); font-weight: 600; }
+    .mini-table .phase-spin  { color: var(--violet); font-weight: 600; }
 
-    /* ── Content ─────────────────────────────────────────── */
-    .content {
-      max-width: 1440px;
-      margin: 0 auto;
-      padding: 24px 32px;
+    /* ── Filter bar ───────────────────────────────────────── */
+    .filter-bar {
+      display: flex; flex-wrap: wrap;
+      align-items: center; gap: 10px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 22px;
+    }
+    .filter-bar .label {
+      font-size: 11px; font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-right: 2px;
+    }
+    .chip {
+      padding: 6px 14px;
+      font-size: 12.5px; font-weight: 500;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-soft);
+      transition: all .12s;
+    }
+    .chip:hover { border-color: var(--border-hi); color: var(--text); }
+    .chip.active {
+      background: var(--accent);
+      color: #181203;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip-divider {
+      width: 1px; height: 22px;
+      background: var(--border);
+      margin: 0 4px;
     }
 
-    .tab-panel        { display: none; }
-    .tab-panel.active { display: block; }
+    /* CAIS inner tabs (batting / bowling) */
+    .sub-tabs {
+      display: inline-flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px;
+      margin-bottom: 20px;
+    }
+    .sub-tab {
+      padding: 8px 20px;
+      font-size: 13px; font-weight: 600;
+      color: var(--text-muted);
+      border-radius: 999px;
+      transition: all .15s;
+    }
+    .sub-tab.active {
+      background: var(--accent);
+      color: #181203;
+    }
+    .sub-tab:not(.active):hover { color: var(--text); }
 
-    /* ── Grid ────────────────────────────────────────────── */
+    /* ── Cards & grid ─────────────────────────────────────── */
     .grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+      gap: 20px;
     }
-
-    /* ── Cards ───────────────────────────────────────────── */
+    .grid-tight {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+    }
     .card {
       background: var(--card);
-      border-radius: var(--radius);
-      padding: 18px 20px 14px;
       border: 1px solid var(--border);
-      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color .15s;
     }
-
+    .card:hover { border-color: var(--border-hi); }
     .card.full { grid-column: 1 / -1; }
-
     .card-title {
-      font-size: 13.5px;
-      font-weight: 600;
+      font-size: 13px; font-weight: 600;
       color: var(--text);
       margin-bottom: 14px;
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
+      display: flex; align-items: center; justify-content: space-between;
+      letter-spacing: 0.005em;
     }
-
     .card-title .hint {
-      font-size: 11px;
+      font-size: 11px; color: var(--text-muted);
       font-weight: 400;
-      color: var(--text-muted);
     }
 
-    /* ── Player search ───────────────────────────────────── */
-    .search-wrapper {
-      margin-bottom: 28px;
-    }
-
-    .search-box {
-      position: relative;
-      max-width: 500px;
-    }
-
-    .search-box svg.search-icon {
-      position: absolute;
-      left: 13px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 16px;
-      height: 16px;
-      pointer-events: none;
-      color: var(--text-muted);
-    }
-
-    #player-search {
-      width: 100%;
-      padding: 12px 16px 12px 40px;
-      background: var(--surface);
-      border: 1.5px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      font-family: inherit;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.15s, box-shadow 0.15s;
-    }
-
-    #player-search::placeholder { color: var(--text-muted); }
-
-    #player-search:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-glow);
-    }
-
-    .search-dropdown {
-      position: absolute;
-      top: calc(100% + 4px);
-      left: 0;
-      right: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      max-height: 280px;
-      overflow-y: auto;
-      z-index: 100;
-      box-shadow: var(--shadow);
-    }
-
-    .search-dropdown.hidden { display: none; }
-
-    .dropdown-item {
-      padding: 10px 16px;
-      cursor: pointer;
-      font-size: 13px;
-      color: var(--text);
-      border-bottom: 1px solid var(--border);
-      transition: background 0.1s, color 0.1s;
-    }
-
-    .dropdown-item:last-child { border-bottom: none; }
-
-    .dropdown-item:hover,
-    .dropdown-item.selected {
-      background: var(--card-hover);
-      color: var(--accent);
-    }
-
-    /* ── Player profile ──────────────────────────────────── */
-    .profile-header {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 20px;
-      padding-bottom: 18px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .profile-name {
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .role-badge {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-      padding: 4px 10px;
-      border-radius: 20px;
-      background: var(--accent-glow);
-      color: var(--accent);
-      border: 1px solid var(--accent-lo);
-    }
-
-    /* ── Stat cards ──────────────────────────────────────── */
+    /* Stat badge */
     .stat-cards {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
+      margin-bottom: 22px;
     }
+    .stat {
+      padding: 16px 18px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .stat-label {
+      font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 24px; font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.cyan { color: var(--cyan); }
+    .stat-value.emerald { color: var(--emerald); }
+    .stat-value.rose { color: var(--rose); }
 
-    .stat-card {
+    /* Leaderboard table */
+    .lb {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .lb th {
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid var(--border);
+    }
+    .lb td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .lb tbody tr { transition: background .1s; }
+    .lb tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .lb tbody tr.top3 td:first-child {
+      color: var(--accent); font-weight: 700;
+    }
+    .lb td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .lb td.cais {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent-hi);
+      font-weight: 700;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    .lb .name { font-weight: 600; color: var(--text); }
+    .lb .team-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 11px;
+      background: var(--bg-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-soft);
+    }
+    .role-pace { color: var(--blue); font-weight: 600; font-size: 11px; }
+    .role-spin { color: var(--violet); font-weight: 600; font-size: 11px; }
+
+    /* ── Player profile overlay ───────────────────────────── */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(5,8,12,0.75);
+      backdrop-filter: blur(6px);
+      z-index: 200;
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 40px 20px;
+      overflow-y: auto;
+      animation: fadeIn .2s;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-backdrop.hidden { display: none; }
+    .modal {
+      width: 100%; max-width: 1100px;
+      background: var(--bg);
+      border: 1px solid var(--border-hi);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 22px 28px;
+      background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(34,211,238,0.04));
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-head h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 24px; font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .modal-close {
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-top: 3px solid var(--accent);
-      border-radius: var(--radius);
-      padding: 13px 16px;
-      min-width: 110px;
-      flex: 1;
+      border-radius: 8px;
+      color: var(--text-soft);
+      font-size: 18px;
+      transition: all .1s;
     }
-
-    .stat-card .sv {
-      font-size: 21px;
-      font-weight: 700;
+    .modal-close:hover {
       color: var(--accent);
-      line-height: 1;
+      border-color: var(--accent);
     }
-
-    .stat-card .sl {
-      font-size: 10.5px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin-top: 5px;
-    }
-
-    /* ── Section separator ───────────────────────────────── */
+    .modal-body { padding: 24px 28px 28px; }
     .section-sep {
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 11px; font-weight: 600;
+      color: var(--accent);
       text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--text-muted);
-      margin: 24px 0 14px;
+      letter-spacing: 0.1em;
+      margin: 22px 0 12px;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
     }
+    .section-sep:first-child { margin-top: 4px; }
 
-    /* ── Empty / loading states ──────────────────────────── */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 80px 20px;
+    /* empty states */
+    .empty {
+      padding: 60px 24px;
+      text-align: center;
       color: var(--text-muted);
-      font-size: 14px;
+      background: var(--card);
+      border: 1px dashed var(--border-hi);
+      border-radius: var(--radius);
     }
-
-    .empty-state svg {
-      width: 48px;
-      height: 48px;
-      opacity: 0.35;
+    .empty svg {
+      width: 44px; height: 44px;
+      margin: 0 auto 12px;
+      color: var(--text-muted);
+      opacity: 0.5;
     }
 
     .hidden { display: none !important; }
 
-    /* ── Responsive ──────────────────────────────────────── */
-    @media (max-width: 860px) {
-      .grid               { grid-template-columns: 1fr; }
-      .card.full          { grid-column: 1; }
-      .content            { padding: 14px; }
-      .tab-nav,
-      .site-header        { padding-left: 14px; padding-right: 14px; }
-      .stat-card          { min-width: 90px; }
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+
+    /* responsive */
+    @media (max-width: 840px) {
+      .topbar-inner { flex-wrap: wrap; gap: 10px; }
+      .topnav { order: 3; width: 100%; overflow-x: auto; }
+      .search-wrap { width: 100%; order: 2; margin-left: 0; }
+      .grid { grid-template-columns: 1fr; }
+      .hero-logo { height: 90px; }
     }
   </style>
 </head>
 <body>
 
-<header class="site-header">
-  <img src="static/psl_logo.png" alt="PSL" class="header-logo"
-       onerror="this.style.display='none'">
-  <div class="header-divider"></div>
-  <div class="header-text">
-    <h1>Analytics Dashboard</h1>
-    <p>Pakistan Super League &middot; Ball-by-Ball Statistics</p>
+<!-- ═══════════ TOP BAR ═══════════ -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand" data-view="home">
+      <img src="static/psl_logo.png" alt="PSL" class="brand-logo"
+           onerror="this.style.display='none'">
+      <div class="brand-wordmark">PSL <span>Insights</span></div>
+    </div>
+
+    <nav class="topnav">
+      <button class="nav-link" data-view="home">Home</button>
+      <button class="nav-link cais" data-view="cais">⚡ CAIS</button>
+      <button class="nav-link" data-view="batting">Batting</button>
+      <button class="nav-link" data-view="bowling">Bowling</button>
+      <button class="nav-link" data-view="records">Records</button>
+    </nav>
+
+    <div class="search-wrap">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="player-search" class="search-input"
+             placeholder="Search any player..." autocomplete="off">
+      <div id="search-dropdown" class="search-dropdown hidden"></div>
+    </div>
   </div>
 </header>
 
-<nav class="tab-nav">
-  <button class="tab-btn active" data-tab="batting">Batting</button>
-  <button class="tab-btn" data-tab="bowling">Bowling</button>
-  <button class="tab-btn" data-tab="teams">Teams</button>
-  <button class="tab-btn" data-tab="records">Records</button>
-  <button class="tab-btn" data-tab="dismissals">Dismissals</button>
-  <button class="tab-btn" data-tab="players">Player Search</button>
-  <button class="tab-btn" data-tab="cais">⚡ CAIS</button>
-</nav>
+<!-- ═══════════ PAGE ═══════════ -->
+<main class="page">
 
-<main class="content">
+  <!-- ════ HOME ════ -->
+  <section id="view-home" class="view active">
 
-  <!-- ── BATTING ─────────────────────────────────────────── -->
-  <div id="batting" class="tab-panel active">
-    <div class="grid">
-      <div class="card full">
-        <div class="card-title">Top Run Scorers <span class="hint">min. 10 matches</span></div>
-        <div id="c-runs"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Strike Rate Leaders <span class="hint">min. 150 balls faced</span></div>
-        <div id="c-sr"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Average vs Strike Rate <span class="hint">bubble size = total runs</span></div>
-        <div id="c-avg-sr"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── BOWLING ─────────────────────────────────────────── -->
-  <div id="bowling" class="tab-panel">
-    <div class="grid">
-      <div class="card full">
-        <div class="card-title">Top Wicket Takers <span class="hint">min. 30 balls bowled</span></div>
-        <div id="c-wickets"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Best Economy Rates <span class="hint">min. 10 wickets</span></div>
-        <div id="c-economy"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Wickets vs Economy <span class="hint">bubble size = matches played</span></div>
-        <div id="c-bowl-scatter"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── TEAMS ───────────────────────────────────────────── -->
-  <div id="teams" class="tab-panel">
-    <div class="grid">
-      <div class="card">
-        <div class="card-title">Total Wins by Franchise</div>
-        <div id="c-wins"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Win Rate % by Franchise</div>
-        <div id="c-winrate"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── RECORDS ─────────────────────────────────────────── -->
-  <div id="records" class="tab-panel">
-    <div class="grid">
-      <div class="card full">
-        <div class="card-title">Highest Individual Innings Scores</div>
-        <div id="c-highest"></div>
-      </div>
-      <div class="card full">
-        <div class="card-title">Century Makers</div>
-        <div id="c-centuries"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── DISMISSALS ──────────────────────────────────────── -->
-  <div id="dismissals" class="tab-panel">
-    <div class="grid">
-      <div class="card">
-        <div class="card-title">Dismissal Methods — Share</div>
-        <div id="c-dis-pie"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Dismissal Methods — Count</div>
-        <div id="c-dis-bar"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── PLAYER SEARCH ───────────────────────────────────── -->
-  <div id="players" class="tab-panel">
-
-    <div class="search-wrapper">
-      <div class="search-box">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input type="text" id="player-search"
-               placeholder="Search for a player (e.g. Babar Azam)..."
-               autocomplete="off">
-        <div id="search-dropdown" class="search-dropdown hidden"></div>
+    <div class="hero">
+      <img src="static/psl_logo.png" alt="PSL" class="hero-logo"
+           onerror="this.style.display='none'">
+      <h1 class="hero-title">Cricket's <span class="accent">hidden context</span>,<br>
+        now measurable.</h1>
+      <p class="hero-sub">
+        PSL Insights goes beyond raw averages. The flagship <strong>CAIS</strong>
+        metric weights every ball by phase, bowler type, batter quality,
+        form, and pressure — so a wicket in the powerplay against a top batter
+        counts for more than a middle-over wicket against a tailender.
+      </p>
+      <div class="hero-cta">
+        <button class="btn btn-primary" data-view="cais">
+          ⚡ Explore CAIS
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+          </svg>
+        </button>
+        <button class="btn btn-secondary" data-view="batting">Browse Stats</button>
       </div>
     </div>
 
-    <!-- Profile (hidden until player selected) -->
-    <div id="player-profile" class="hidden">
+    <h2 class="section-title">What's inside</h2>
+    <p class="section-sub">Every tab can be filtered by season. Search any player from the bar above.</p>
 
-      <div class="profile-header">
-        <span id="profile-name" class="profile-name"></span>
-        <span id="profile-role" class="role-badge"></span>
-      </div>
-
-      <!-- Batting section -->
-      <div id="batting-section" class="hidden">
-        <div class="section-sep">Batting</div>
-        <div id="batting-cards" class="stat-cards"></div>
-        <div class="grid">
-          <div class="card">
-            <div class="card-title">Runs by Season</div>
-            <div id="c-p-seasons"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">Innings History <span class="hint">red = dismissed &nbsp; green = not out</span></div>
-            <div id="c-p-innings"></div>
-          </div>
+    <div class="feature-grid">
+      <div class="feature" data-view="cais">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-title">CAIS Engine</div>
+        <div class="feature-desc">
+          Context-Adjusted Impact Score — ranks batters & bowlers using a 5-factor
+          weighting system. Season & team filters built in.
         </div>
       </div>
-
-      <!-- Bowling section -->
-      <div id="bowling-section" class="hidden">
-        <div class="section-sep">Bowling</div>
-        <div id="bowling-cards" class="stat-cards"></div>
-        <div class="grid">
-          <div class="card full">
-            <div class="card-title">Wickets by Season</div>
-            <div id="c-p-bowl-seasons"></div>
-          </div>
+      <div class="feature" data-view="batting">
+        <div class="feature-icon">🏏</div>
+        <div class="feature-title">Batting</div>
+        <div class="feature-desc">
+          Top run scorers, strike-rate leaders, and the average-vs-SR trade-off across 8 seasons.
         </div>
       </div>
-
-      <!-- No data fallback -->
-      <div id="no-data" class="empty-state hidden">
-        <p>No statistics found for this player.</p>
+      <div class="feature" data-view="bowling">
+        <div class="feature-icon">🎯</div>
+        <div class="feature-title">Bowling</div>
+        <div class="feature-desc">
+          Wicket kings and economy experts. Wickets-vs-economy scatter reveals specialists.
+        </div>
       </div>
-
+      <div class="feature" data-view="records">
+        <div class="feature-icon">🏆</div>
+        <div class="feature-title">Records</div>
+        <div class="feature-desc">
+          Highest individual scores, century makers, franchise win-rates, and dismissal breakdowns.
+        </div>
+      </div>
     </div>
 
-    <!-- Pre-search empty state -->
-    <div id="player-empty" class="empty-state">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
-      <p>Search for a player to view their statistics</p>
+    <h2 class="section-title">Why CAIS?</h2>
+    <div class="about-block">
+      <h3>The problem with averages</h3>
+      <p>
+        A batter scoring 35 off 25 balls against a tailender in a dead middle over
+        looks identical to 35 off 25 against a pace ace in the powerplay with wickets
+        down. Conventional strike rate and average flatten all of that context.
+        <strong>CAIS does not.</strong>
+      </p>
+      <p>
+        The metric is built on PSL ball-by-ball data. Every delivery is re-priced
+        before it hits the tally.
+      </p>
     </div>
+    <div class="about-block">
+      <h3>Get into the details</h3>
+      <p>
+        A full breakdown of every weight, multiplier and formula lives in the
+        <strong>CAIS tab</strong> under <em>How it's calculated</em> — including
+        the phase × bowler-role wicket matrix and the batter-quality tier system.
+      </p>
+      <button class="btn btn-primary" data-view="cais" style="margin-top:12px">
+        See the methodology →
+      </button>
+    </div>
+  </section>
 
-  </div><!-- /players -->
+  <!-- ════ CAIS ════ -->
+  <section id="view-cais" class="view">
 
-  <!-- ── CAIS ──────────────────────────────────────────────── -->
-  <div id="cais" class="tab-panel">
-
-    <div class="section-sep" style="margin-bottom:8px">Context-Adjusted Impact Score</div>
-    <p style="color:var(--text-muted);font-size:13px;margin-bottom:24px;max-width:780px">
-      CAIS weights every delivery by match context — game phase (Powerplay / Middle / Death),
-      bowler type (pace vs spin), opposition batter quality tier, rolling form, and in-match pressure.
-      A wicket in the Powerplay by a fast bowler against an elite batter is worth 3× more than a
-      middle-over wicket against a lower-tier batter.
+    <h2 class="section-title">⚡ CAIS — Context-Adjusted Impact Score</h2>
+    <p class="section-sub">
+      Every ball re-priced by match phase, bowler type, batter quality, form, and pressure.
+      Pick a season to zoom in on a single campaign, or leave it on <strong>All seasons</strong>
+      for career totals.
     </p>
 
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <span class="label">Season</span>
+      <div id="cais-season-chips" class="chip-group">
+        <!-- filled by JS -->
+      </div>
+      <div class="chip-divider"></div>
+      <span class="label">Team</span>
+      <div id="cais-team-chips" class="chip-group">
+        <button class="chip active" data-team="">All</button>
+      </div>
+    </div>
+
+    <!-- Sub-tabs: Batting / Bowling -->
+    <div class="sub-tabs" role="tablist">
+      <button class="sub-tab active" data-cais="batting">Batting</button>
+      <button class="sub-tab" data-cais="bowling">Bowling</button>
+    </div>
+
+    <!-- Batting CAIS -->
+    <div id="cais-batting-panel" class="cais-panel">
+      <div id="cais-bat-stats" class="stat-cards"></div>
+      <div class="grid">
+        <div class="card">
+          <div class="card-title">Top 20 Leaderboard</div>
+          <div style="max-height:560px;overflow:auto">
+            <table class="lb" id="cais-bat-table"></table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">CAIS — Bar view</div>
+          <div id="cais-bat-chart"></div>
+        </div>
+      </div>
+      <div class="card full" style="margin-top:20px">
+        <div class="card-title">
+          CAIS vs Raw Strike Rate
+          <span class="hint">bubble size = balls · colour = context lift</span>
+        </div>
+        <div id="cais-bat-scatter"></div>
+      </div>
+    </div>
+
+    <!-- Bowling CAIS -->
+    <div id="cais-bowling-panel" class="cais-panel hidden">
+      <div id="cais-bowl-stats" class="stat-cards"></div>
+      <div class="grid">
+        <div class="card">
+          <div class="card-title">Top 20 Leaderboard</div>
+          <div style="max-height:560px;overflow:auto">
+            <table class="lb" id="cais-bowl-table"></table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">CAIS — Bar view</div>
+          <div id="cais-bowl-chart"></div>
+        </div>
+      </div>
+      <div class="card full" style="margin-top:20px">
+        <div class="card-title">Pace vs Spin — CAIS per over</div>
+        <div id="cais-bowl-role"></div>
+      </div>
+    </div>
+
+    <!-- Methodology -->
+    <h2 class="section-title" style="margin-top:56px">How CAIS is calculated</h2>
+    <p class="section-sub">The full formula, every multiplier, every weight.</p>
+
+    <div class="about-block">
+      <h3>Batting CAIS</h3>
+      <p>
+        Each ball a batter faces is worth its raw run value (0, 1, 2, 3, 4, 6)
+        multiplied by three context weights:
+      </p>
+      <div class="formula">
+        CAIS<sub>bat</sub> = Σ(runs × phase<sub>bat</sub> × pressure) ÷ balls × 100 × form<sub>avg</sub>
+      </div>
+      <table class="mini-table">
+        <thead>
+          <tr><th>Factor</th><th>Values</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>phase<sub>bat</sub></td>
+            <td><strong>PP: 1.2</strong> · Mid: 1.0 · <strong>Death: 1.3</strong></td>
+            <td>Scoring in the powerplay (bowlers attack) and death (rare, hard) is harder than in middle overs.</td>
+          </tr>
+          <tr>
+            <td>pressure</td>
+            <td>1.0 → 1.3</td>
+            <td>Rises with wickets lost so far × over number. Runs under collapse are worth more.</td>
+          </tr>
+          <tr>
+            <td>form<sub>avg</sub></td>
+            <td>1.0 → 1.45</td>
+            <td>Rolling 3-match run window. Runs on a purple patch score a little extra.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="about-block">
+      <h3>Bowling CAIS</h3>
+      <p>
+        Each delivery scores the bowler positively on wickets and negatively on runs conceded,
+        with <strong>wicket value scaled by five factors</strong>:
+      </p>
+      <div class="formula">
+        wicket_value = 30 × phase×role × batter_tier × form × pressure
+      </div>
+      <div class="formula">
+        run_cost = runs_conceded × phase<sub>bowl</sub> × 0.5
+      </div>
+      <div class="formula">
+        CAIS<sub>bowl</sub> = Σ(wicket_value − run_cost) ÷ overs
+      </div>
+      <p><strong>Phase × Role wicket multiplier</strong> — this is the heart of why pace powerplay wickets are golden:</p>
+      <table class="mini-table">
+        <thead>
+          <tr><th>Phase</th><th class="phase-pace">Pace</th><th class="phase-spin">Spin</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Powerplay (1–6)</td><td class="num">2.0×</td><td class="num">1.5×</td></tr>
+          <tr><td>Middle (7–15)</td><td class="num">1.2×</td><td class="num">1.5×</td></tr>
+          <tr><td>Death (16–20)</td><td class="num">1.8×</td><td class="num">1.2×</td></tr>
+        </tbody>
+      </table>
+      <table class="mini-table">
+        <thead>
+          <tr><th>Factor</th><th>Values</th><th>What it captures</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>batter_tier</td><td>0.75 · 1.0 · 1.2 · 1.5</td>
+            <td>Batter's career avg-SR percentile. Dismissing elite batters (top 25%) scores 1.5×; tailenders 0.75×.</td></tr>
+          <tr><td>form</td><td>1.0 → 1.45</td>
+            <td>Same rolling window as batting — in-form batter = more valuable wicket.</td></tr>
+          <tr><td>role inference</td><td>pace vs spin</td>
+            <td>If &gt;55% of balls bowled are in overs 7–15 → classified as spinner.</td></tr>
+          <tr><td>pressure</td><td>1.0 → 1.3</td><td>Rises with match state wickets × over.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="about-block">
+      <h3>Design choices</h3>
+      <p>
+        <strong>Why 30 as the wicket base?</strong> A typical T20 batting innings is ~25 balls;
+        30 calibrates a wicket's impact roughly to a quarter-innings of top-phase run-scoring.
+      </p>
+      <p>
+        <strong>Why 0.5× run cost?</strong> Raw run cost would dominate the score. The half
+        weight keeps wickets central while still punishing expensive overs.
+      </p>
+      <p>
+        <strong>Why pace-powerplay wickets get 2.0×?</strong> They're rare (pacers average
+        ~1 wicket per 4 powerplay overs), flip momentum, and expose new batters immediately —
+        the biggest single swing in T20.
+      </p>
+    </div>
+
+  </section>
+
+  <!-- ════ BATTING ════ -->
+  <section id="view-batting" class="view">
+    <h2 class="section-title">Batting</h2>
+    <p class="section-sub">Runs, strike rates, and the average-vs-SR trade-off.</p>
+
+    <div class="filter-bar">
+      <span class="label">Season</span>
+      <div id="batting-season-chips" class="chip-group"></div>
+    </div>
+
     <div class="grid">
-      <div class="card">
-        <div class="card-title">⚡ Batting CAIS — Top 20</div>
-        <div id="c-cais-bat"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">⚡ Bowling CAIS — Top 20</div>
-        <div id="c-cais-bowl"></div>
-      </div>
+      <div class="card"><div class="card-title">Top 15 Run Scorers</div><div id="c-batting-runs"></div></div>
+      <div class="card"><div class="card-title">Top Strike Rates (min 150 balls)</div><div id="c-batting-sr"></div></div>
+      <div class="card full"><div class="card-title">Average vs Strike Rate — bubble size = total runs</div><div id="c-batting-scatter"></div></div>
+    </div>
+  </section>
+
+  <!-- ════ BOWLING ════ -->
+  <section id="view-bowling" class="view">
+    <h2 class="section-title">Bowling</h2>
+    <p class="section-sub">Wickets, economy, and the wickets-vs-economy matrix.</p>
+
+    <div class="filter-bar">
+      <span class="label">Season</span>
+      <div id="bowling-season-chips" class="chip-group"></div>
     </div>
 
-    <div class="grid" style="margin-top:20px">
-      <div class="card full">
-        <div class="card-title">CAIS vs Raw Strike Rate (Batting) — does context lift or deflate the number?</div>
-        <div id="c-cais-scatter"></div>
-      </div>
+    <div class="grid">
+      <div class="card"><div class="card-title">Top 15 Wicket Takers</div><div id="c-bowling-wkts"></div></div>
+      <div class="card"><div class="card-title">Best Economy Rates</div><div id="c-bowling-econ"></div></div>
+      <div class="card full"><div class="card-title">Wickets vs Economy — bubble size = matches</div><div id="c-bowling-scatter"></div></div>
+    </div>
+  </section>
+
+  <!-- ════ RECORDS (merged: records + teams + dismissals) ════ -->
+  <section id="view-records" class="view">
+    <h2 class="section-title">Records & Teams</h2>
+    <p class="section-sub">Highest scores, century makers, franchise performance, and dismissal patterns.</p>
+
+    <div class="grid">
+      <div class="card"><div class="card-title">Highest Individual Scores</div><div id="c-rec-scores"></div></div>
+      <div class="card"><div class="card-title">Most Centuries</div><div id="c-rec-cent"></div></div>
     </div>
 
-    <div class="grid" style="margin-top:20px">
-      <div class="card full">
-        <div class="card-title">Bowling CAIS by Role — Pace vs Spin</div>
-        <div id="c-cais-role"></div>
-      </div>
+    <h3 class="section-title" style="font-size:20px;margin:40px 0 12px">Team Performance</h3>
+    <div class="grid">
+      <div class="card"><div class="card-title">Wins by Franchise</div><div id="c-teams-wins"></div></div>
+      <div class="card"><div class="card-title">Win Rate (%)</div><div id="c-teams-wr"></div></div>
     </div>
 
-  </div><!-- /cais -->
+    <h3 class="section-title" style="font-size:20px;margin:40px 0 12px">Dismissal Patterns</h3>
+    <div class="grid">
+      <div class="card"><div class="card-title">By Type (Share)</div><div id="c-dis-pie"></div></div>
+      <div class="card"><div class="card-title">Raw Counts</div><div id="c-dis-bar"></div></div>
+    </div>
+  </section>
 
 </main>
 
-<script>
-/* ── Palette ──────────────────────────────────────────────── */
-const G0 = '#22c55e', G1 = '#4ade80', G2 = '#166534';
-const BLUE = '#3b82f6', RED = '#ef4444', ORG = '#f97316';
-const PALETTE = ['#22c55e','#3b82f6','#f97316','#a78bfa',
-                 '#ef4444','#06b6d4','#84cc16','#f59e0b',
-                 '#ec4899','#14b8a6'];
+<!-- ═══════════ PLAYER MODAL ═══════════ -->
+<div id="player-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modal-name">Player</h2>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
 
-/* ── Plotly defaults (dark theme) ────────────────────────── */
-const BG   = '#162019';
+      <div id="modal-batting" class="hidden">
+        <div class="section-sep">Batting</div>
+        <div id="modal-bat-stats" class="stat-cards"></div>
+        <div class="grid">
+          <div class="card"><div class="card-title">Runs by Season</div><div id="modal-bat-seasons"></div></div>
+          <div class="card"><div class="card-title">Innings History
+            <span class="hint">red = dismissed · green = not out</span></div>
+            <div id="modal-bat-innings"></div></div>
+        </div>
+      </div>
+
+      <div id="modal-bowling" class="hidden">
+        <div class="section-sep">Bowling</div>
+        <div id="modal-bowl-stats" class="stat-cards"></div>
+        <div class="card full"><div class="card-title">Wickets by Season</div><div id="modal-bowl-seasons"></div></div>
+      </div>
+
+      <div id="modal-none" class="empty hidden">
+        <p>No data found for this player.</p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ╔═══════════════════════════════════════════════════════════════════╗
+   ║  PSL INSIGHTS — App logic                                        ║
+   ╚═══════════════════════════════════════════════════════════════════╝ */
+
+/* ── Palette ─────────────────────────────────────────────── */
+const PAL = {
+  amber:   '#fbbf24',  cyan:    '#22d3ee',  rose:    '#fb7185',
+  violet:  '#a78bfa',  emerald: '#34d399',  orange:  '#fb923c',
+  blue:    '#60a5fa',  pink:    '#f472b6',  yellow:  '#facc15',
+  lime:    '#a3e635',
+};
+const RAINBOW = [PAL.amber, PAL.cyan, PAL.rose, PAL.violet, PAL.emerald,
+                 PAL.orange, PAL.blue, PAL.pink, PAL.lime, PAL.yellow];
+
+const TEAM_COLOR = {
+  'Islamabad United':  '#f59e0b',
+  'Karachi Kings':     '#60a5fa',
+  'Lahore Qalandars':  '#34d399',
+  'Multan Sultans':    '#22d3ee',
+  'Peshawar Zalmi':    '#fb7185',
+  'Quetta Gladiators': '#a78bfa',
+};
+
+/* Plotly dark-theme defaults */
+const CARD_BG = '#1a2332';
 const BASE = {
-  paper_bgcolor: BG,
-  plot_bgcolor:  BG,
-  font: { family: "'Inter', sans-serif", size: 12, color: '#d4edd8' },
+  paper_bgcolor: CARD_BG,
+  plot_bgcolor:  CARD_BG,
+  font: { family: "'Inter', sans-serif", size: 12, color: '#e6ebf3' },
   hoverlabel: {
-    bgcolor: '#0c1510', bordercolor: '#22c55e',
-    font: { color: '#d4edd8', size: 12 }
+    bgcolor: '#0a0e14', bordercolor: PAL.amber,
+    font: { color: '#e6ebf3', size: 12 }
   },
+  margin: { l: 120, r: 20, t: 10, b: 50 },
 };
 const AXIS = {
-  gridcolor: '#1e3024',
-  zerolinecolor: '#2a4035',
-  tickfont: { color: '#6b8a70' },
-  titlefont: { color: '#7a9a80' },
+  gridcolor: '#263449',
+  zerolinecolor: '#3d5170',
+  tickfont: { color: '#a5b2c6' },
+  titlefont: { color: '#a5b2c6', size: 11 },
 };
 const CFG = { responsive: true, displayModeBar: false };
 
-/* ── API helper: works with Flask locally AND GitHub Pages (static) ── */
+/* ── API helper — works Flask + static ──────────────────── */
 const FLASK = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-async function apiGet(ep) {
+async function apiGet(ep, query = {}) {
+  const qs = new URLSearchParams(Object.entries(query).filter(([,v]) => v !== null && v !== '' && v !== undefined)).toString();
   if (FLASK) {
     try {
-      const r = await fetch(`/api/${ep}`);
+      const url = `/api/${ep}${qs ? '?' + qs : ''}`;
+      const r = await fetch(url);
       if (r.ok) return await r.json();
     } catch(_) {}
   }
-  // Relative path works for file://, GitHub Pages, and Flask
-  return fetch(`static/data/${ep}.json`).then(r => r.json());
+  // static fallback: use season-suffixed file if applicable
+  let file = ep.replace(/\//g, '-');
+  if (query.season) file = `${file}-${query.season}`;
+  return fetch(`static/data/${file}.json`).then(r => r.json());
 }
 
-/* ── Chart helpers ────────────────────────────────────────── */
+/* ── View router ────────────────────────────────────────── */
+const loaded = {};
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(a =>
+    a.classList.toggle('active', a.dataset.view === name));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (!loaded[name] && LOADERS[name]) { LOADERS[name](); loaded[name] = true; }
+}
 
-function hBar(elId, names, values, { xTitle = '', height = 440 } = {}) {
-  const order = names.map((n, i) => [n, values[i]]).sort((a, b) => a[1] - b[1]);
-  const n = order.length;
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-view]');
+  if (t) { showView(t.dataset.view); }
+});
+
+/* ── Chart helpers ──────────────────────────────────────── */
+function hBar(elId, names, values, opts = {}) {
+  const {
+    xTitle = '', height = 440, color = PAL.amber,
+    colorArr = null, hovertemplate = null,
+  } = opts;
+  const order = names.map((n, i) => [n, values[i], colorArr ? colorArr[i] : null])
+                     .sort((a, b) => a[1] - b[1]);
   Plotly.newPlot(elId, [{
     type: 'bar', orientation: 'h',
     x: order.map(p => p[1]),
     y: order.map(p => p[0]),
     marker: {
-      color: order.map((_, i) => {
-        const t = i / Math.max(n - 1, 1);
-        return `rgba(34,197,94,${(0.3 + t * 0.7).toFixed(2)})`;
-      }),
+      color: colorArr ? order.map(p => p[2]) : color,
+      line: { color: 'rgba(255,255,255,0.06)', width: 1 },
     },
-    hovertemplate: '<b>%{y}</b><br>' + xTitle + ': <b>%{x}</b><extra></extra>',
+    hovertemplate: hovertemplate || `<b>%{y}</b><br>${xTitle}: %{x}<extra></extra>`,
   }], {
     ...BASE,
-    height,
-    margin: { t: 8, r: 20, b: 40, l: 170 },
     xaxis: { ...AXIS, title: xTitle },
-    yaxis: { ...AXIS },
-  }, CFG);
-}
-
-function vBar(elId, names, values, { yTitle = '', height = 380, colors } = {}) {
-  Plotly.newPlot(elId, [{
-    type: 'bar',
-    x: names, y: values,
-    marker: { color: colors ?? G0, opacity: 0.85 },
-    hovertemplate: '<b>%{x}</b><br>' + yTitle + ': <b>%{y}</b><extra></extra>',
-  }], {
-    ...BASE,
+    yaxis: { ...AXIS, automargin: true, tickfont: { color: '#e6ebf3', size: 11.5 } },
     height,
-    margin: { t: 8, r: 20, b: 110, l: 55 },
-    xaxis: { ...AXIS, tickangle: -38 },
+    margin: { l: 150, r: 20, t: 10, b: 50 },
+  }, CFG);
+}
+
+function scatter(elId, rows, xKey, yKey, sizeKey, labelKey, opts = {}) {
+  const { xTitle = xKey, yTitle = yKey, height = 480, colorKey = null, colorscale = null } = opts;
+  const maxS = Math.max(...rows.map(r => r[sizeKey] || 1));
+  Plotly.newPlot(elId, [{
+    type: 'scatter', mode: 'markers+text',
+    x: rows.map(r => r[xKey]),
+    y: rows.map(r => r[yKey]),
+    text: rows.map(r => (r[labelKey] || '').split(' ').pop()),
+    textposition: 'top center',
+    textfont: { size: 10, color: '#a5b2c6' },
+    marker: {
+      size: rows.map(r => Math.max(8, Math.sqrt((r[sizeKey] || 1) / maxS) * 42)),
+      color: colorKey ? rows.map(r => r[colorKey]) : PAL.amber,
+      colorscale: colorscale || [[0, PAL.rose], [0.5, PAL.amber], [1, PAL.emerald]],
+      showscale: !!colorKey,
+      colorbar: colorKey ? { thickness: 12,
+        tickfont: { color: '#a5b2c6' }, titlefont: { color: '#a5b2c6' } } : undefined,
+      line: { color: 'rgba(255,255,255,0.25)', width: 1 },
+    },
+    hovertemplate: `<b>%{text}</b><br>${xTitle}: %{x}<br>${yTitle}: %{y}<extra></extra>`,
+  }], {
+    ...BASE,
+    xaxis: { ...AXIS, title: xTitle },
     yaxis: { ...AXIS, title: yTitle },
+    height,
+    margin: { l: 60, r: 20, t: 20, b: 60 },
   }, CFG);
 }
 
-/* ── Tab switching ────────────────────────────────────────── */
-const loaded = {};
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const tab = btn.dataset.tab;
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(tab).classList.add('active');
-    btn.classList.add('active');
-    if (!loaded[tab] && LOADERS[tab]) { LOADERS[tab](); loaded[tab] = true; }
-  });
-});
-
-/* ── BATTING ──────────────────────────────────────────────── */
-async function loadBatting() {
-  const [batting, sr] = await Promise.all([
-    apiGet('batting'),
-    apiGet('strike-rates'),
-  ]);
-
-  hBar('c-runs', batting.map(d => d.batter), batting.map(d => d.total_runs),
-       { xTitle: 'Total Runs', height: 520 });
-
-  hBar('c-sr', sr.map(d => d.batter), sr.map(d => d.SR),
-       { xTitle: 'Strike Rate', height: 440 });
-
-  const valid = batting.filter(d => d.average !== null && d.average < 300);
-  Plotly.newPlot('c-avg-sr', [{
-    type: 'scatter', mode: 'markers+text',
-    x: valid.map(d => d.SR),
-    y: valid.map(d => d.average),
-    text: valid.map(d => d.batter.split(' ').pop()),
-    textposition: 'top center',
-    textfont: { size: 9.5, color: '#6b8a70' },
-    marker: {
-      size: valid.map(d => Math.max(8, Math.sqrt(d.total_runs / 8))),
-      color: valid.map(d => d.total_runs),
-      colorscale: [[0,'#1a3020'],[1,'#22c55e']],
-      showscale: true,
-      colorbar: {
-        title: 'Runs', thickness: 12, len: 0.65,
-        tickfont: { size: 10, color: '#6b8a70' },
-        titlefont: { color: '#6b8a70' },
-      },
-      line: { color: '#0c1510', width: 1 },
-      opacity: 0.9,
-    },
-    hovertemplate: '<b>%{text}</b><br>SR: %{x}<br>Avg: %{y}<extra></extra>',
-  }], {
-    ...BASE,
-    height: 440,
-    margin: { t: 8, r: 70, b: 50, l: 55 },
-    xaxis: { ...AXIS, title: 'Strike Rate' },
-    yaxis: { ...AXIS, title: 'Batting Average' },
-  }, CFG);
-}
-
-/* ── BOWLING ──────────────────────────────────────────────── */
-async function loadBowling() {
-  const data = await apiGet('bowling');
-
-  hBar('c-wickets', data.map(d => d.bowler), data.map(d => d.wickets),
-       { xTitle: 'Wickets', height: 560 });
-
-  const qualified = [...data].filter(d => d.wickets >= 10)
-                             .sort((a, b) => a.economy - b.economy)
-                             .slice(0, 15)
-                             .reverse();
-  Plotly.newPlot('c-economy', [{
-    type: 'bar', orientation: 'h',
-    x: qualified.map(d => d.economy),
-    y: qualified.map(d => d.bowler),
-    marker: {
-      color: qualified.map((_, i) => {
-        const t = i / Math.max(qualified.length - 1, 1);
-        return `rgba(59,130,246,${(0.3 + t * 0.7).toFixed(2)})`;
-      }),
-    },
-    hovertemplate: '<b>%{y}</b><br>Economy: <b>%{x}</b><extra></extra>',
-  }], {
-    ...BASE,
-    height: 440,
-    margin: { t: 8, r: 20, b: 40, l: 170 },
-    xaxis: { ...AXIS, title: 'Economy Rate (lower is better)', autorange: 'reversed' },
-    yaxis: { ...AXIS },
-  }, CFG);
-
-  Plotly.newPlot('c-bowl-scatter', [{
-    type: 'scatter', mode: 'markers+text',
-    x: data.map(d => d.economy),
-    y: data.map(d => d.wickets),
-    text: data.map(d => d.bowler.split(' ').pop()),
-    textposition: 'top center',
-    textfont: { size: 9.5, color: '#6b8a70' },
-    marker: {
-      size: data.map(d => Math.max(8, Math.sqrt(d.matches) * 3.5)),
-      color: data.map(d => d.wickets),
-      colorscale: [[0,'#1a2040'],[1,'#3b82f6']],
-      showscale: true,
-      colorbar: {
-        title: 'Wickets', thickness: 12, len: 0.65,
-        tickfont: { size: 10, color: '#6b8a70' },
-        titlefont: { color: '#6b8a70' },
-      },
-      line: { color: '#0c1510', width: 1 },
-      opacity: 0.9,
-    },
-    hovertemplate: '<b>%{text}</b><br>Economy: %{x}<br>Wickets: %{y}<extra></extra>',
-  }], {
-    ...BASE,
-    height: 440,
-    margin: { t: 8, r: 70, b: 50, l: 55 },
-    xaxis: { ...AXIS, title: 'Economy Rate' },
-    yaxis: { ...AXIS, title: 'Wickets' },
-  }, CFG);
-}
-
-/* ── TEAMS ────────────────────────────────────────────────── */
-async function loadTeams() {
-  const data = await apiGet('teams');
-
-  const byWins    = [...data].sort((a, b) => b.wins - a.wins);
-  const byWinRate = [...data].sort((a, b) => b.win_rate - a.win_rate);
-
-  vBar('c-wins',
-    byWins.map(d => d.team), byWins.map(d => d.wins),
-    { yTitle: 'Wins', colors: byWins.map((_, i) => PALETTE[i % PALETTE.length]) });
-
-  vBar('c-winrate',
-    byWinRate.map(d => d.team), byWinRate.map(d => d.win_rate),
-    { yTitle: 'Win Rate (%)', colors: byWinRate.map((_, i) => PALETTE[i % PALETTE.length]) });
-}
-
-/* ── RECORDS ──────────────────────────────────────────────── */
-async function loadRecords() {
-  const [scores, centuries] = await Promise.all([
-    apiGet('highest-scores'),
-    apiGet('centuries'),
-  ]);
-
-  hBar('c-highest',
-    scores.map(d => `${d.batter}  ·  ${d.date.slice(0, 4)}`),
-    scores.map(d => d.runs),
-    { xTitle: 'Runs', height: 440 });
-
-  vBar('c-centuries',
-    centuries.map(d => d.batter), centuries.map(d => d.centuries),
-    { yTitle: 'Centuries', colors: G0 });
-}
-
-/* ── DISMISSALS ───────────────────────────────────────────── */
-async function loadDismissals() {
-  const data = await apiGet('dismissals');
-
-  Plotly.newPlot('c-dis-pie', [{
-    type: 'pie',
-    labels: data.map(d => d.dismissal_kind),
-    values: data.map(d => d.count),
-    hole: 0.42,
-    marker: {
-      colors: PALETTE,
-      line: { color: '#0c1510', width: 2 },
-    },
-    textinfo: 'label+percent',
-    textfont: { size: 11.5, color: '#d4edd8' },
-    hovertemplate: '<b>%{label}</b><br>%{value} (%{percent})<extra></extra>',
-  }], {
-    ...BASE,
-    height: 380,
-    margin: { t: 10, r: 10, b: 10, l: 10 },
-    showlegend: false,
-  }, CFG);
-
-  vBar('c-dis-bar',
-    data.map(d => d.dismissal_kind), data.map(d => d.count),
-    { yTitle: 'Count', colors: data.map((_, i) => PALETTE[i % PALETTE.length]) });
-}
-
-/* ── PLAYER SEARCH ────────────────────────────────────────── */
-let allPlayers = [];
-
-async function loadPlayers() {
-  allPlayers = await apiGet('players');
-}
-
-const searchInput    = document.getElementById('player-search');
-const dropdown       = document.getElementById('search-dropdown');
-const profileEl      = document.getElementById('player-profile');
-const emptyEl        = document.getElementById('player-empty');
-let ddIndex = -1;
-
-searchInput.addEventListener('input', () => {
-  const q = searchInput.value.trim().toLowerCase();
-  ddIndex = -1;
-  if (q.length < 2) { dropdown.classList.add('hidden'); return; }
-
-  const matches = allPlayers
-    .filter(p => p.toLowerCase().includes(q))
-    .slice(0, 10);
-
-  if (matches.length === 0) { dropdown.classList.add('hidden'); return; }
-
-  dropdown.innerHTML = matches
-    .map(p => `<div class="dropdown-item" data-name="${p}">${p}</div>`)
-    .join('');
-  dropdown.classList.remove('hidden');
-
-  dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-    item.addEventListener('mousedown', e => {
-      e.preventDefault();
-      selectPlayer(item.dataset.name);
-    });
-  });
-});
-
-searchInput.addEventListener('keydown', e => {
-  const items = dropdown.querySelectorAll('.dropdown-item');
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    ddIndex = Math.min(ddIndex + 1, items.length - 1);
-    items.forEach((el, i) => el.classList.toggle('selected', i === ddIndex));
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    ddIndex = Math.max(ddIndex - 1, 0);
-    items.forEach((el, i) => el.classList.toggle('selected', i === ddIndex));
-  } else if (e.key === 'Enter' && ddIndex >= 0) {
-    selectPlayer(items[ddIndex].dataset.name);
-  } else if (e.key === 'Escape') {
-    dropdown.classList.add('hidden');
+/* ══════════════════════════════════════════════════════════
+   SEASONS & FILTERS
+   ══════════════════════════════════════════════════════════ */
+let SEASONS = [];
+async function loadSeasons() {
+  try {
+    SEASONS = await fetch('static/data/seasons.json').then(r => r.json());
+  } catch(_) {
+    SEASONS = [2016,2017,2018,2019,2020,2021,2022,2023,2024];
   }
-});
-
-document.addEventListener('click', e => {
-  if (!e.target.closest('.search-box')) dropdown.classList.add('hidden');
-});
-
-function selectPlayer(name) {
-  searchInput.value = name;
-  dropdown.classList.add('hidden');
-  renderPlayerProfile(name);
+}
+function buildSeasonChips(containerId, onChange, initial = '') {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  const mkChip = (value, label) => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (String(initial) === String(value) ? ' active' : '');
+    b.dataset.season = value;
+    b.textContent = label;
+    b.onclick = () => {
+      el.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      onChange(value);
+    };
+    el.appendChild(b);
+  };
+  mkChip('', 'All');
+  SEASONS.forEach(s => mkChip(s, s));
 }
 
-function statCard(value, label) {
-  return `<div class="stat-card"><div class="sv">${value}</div><div class="sl">${label}</div></div>`;
+const TEAMS = ['Islamabad United','Karachi Kings','Lahore Qalandars',
+               'Multan Sultans','Peshawar Zalmi','Quetta Gladiators'];
+
+/* ══════════════════════════════════════════════════════════
+   CAIS  (the main event)
+   ══════════════════════════════════════════════════════════ */
+const caisState = {
+  season: '',
+  team: '',
+  mode: 'batting',
+  data: { batting: null, bowling: null },
+};
+
+async function fetchCaisData(kind) {
+  const data = await apiGet(`cais/${kind}`, { season: caisState.season });
+  caisState.data[kind] = data;
+  return data;
 }
 
-function renderStatCards(elId, stats) {
-  document.getElementById(elId).innerHTML = stats.map(s => statCard(s.v, s.l)).join('');
+function filterByTeam(rows) {
+  if (!caisState.team) return rows;
+  return rows.filter(r => r.team === caisState.team);
 }
 
-function fmt(v, decimals = 2) {
-  return v == null ? '—' : typeof v === 'number' ? v.toFixed(decimals) : v;
-}
-
-async function renderPlayerProfile(name) {
-  emptyEl.classList.add('hidden');
-  profileEl.classList.remove('hidden');
-
-  // Purge old charts
-  ['c-p-seasons','c-p-innings','c-p-bowl-seasons'].forEach(id => {
-    try { Plotly.purge(document.getElementById(id)); } catch(_) {}
-  });
-
-  if (!FLASK) {
-    document.getElementById('profile-name').textContent = 'Player search requires the Flask server.';
-    document.getElementById('profile-role').textContent = '';
-    document.getElementById('batting-section').classList.add('hidden');
-    document.getElementById('bowling-section').classList.add('hidden');
-    document.getElementById('no-data').classList.remove('hidden');
-    return;
-  }
-  const data = await fetch(`/api/player/${encodeURIComponent(name)}`).then(r => r.json());
-
-  document.getElementById('profile-name').textContent = name;
-
-  const role = data.batting && data.bowling ? 'All-Rounder'
-             : data.batting ? 'Batter'
-             : data.bowling ? 'Bowler' : '';
-  document.getElementById('profile-role').textContent = role;
-
-  const hasAny = data.batting || data.bowling;
-  document.getElementById('no-data').classList.toggle('hidden', !!hasAny);
-
-  /* ── Batting ── */
-  const batSec = document.getElementById('batting-section');
-  if (data.batting) {
-    const b = data.batting;
-    renderStatCards('batting-cards', [
-      { v: b.total_runs.toLocaleString(), l: 'Runs' },
-      { v: b.matches,                     l: 'Matches' },
-      { v: b.innings,                     l: 'Innings' },
-      { v: fmt(b.average),                l: 'Average' },
-      { v: fmt(b.sr),                     l: 'Strike Rate' },
-      { v: b.highest,                     l: 'Highest' },
-      { v: b.fifties,                     l: "50's" },
-      { v: b.hundreds,                    l: "100's" },
-    ]);
-    batSec.classList.remove('hidden');
-
-    // Season runs bar
-    const seas = data.batting_seasons;
-    Plotly.newPlot('c-p-seasons', [{
-      type: 'bar',
-      x: seas.map(s => String(s.season)),
-      y: seas.map(s => s.runs),
-      marker: {
-        color: seas.map((_, i) => {
-          const t = i / Math.max(seas.length - 1, 1);
-          return `rgba(34,197,94,${(0.4 + t * 0.6).toFixed(2)})`;
-        }),
-      },
-      hovertemplate: '<b>%{x}</b><br>Runs: %{y}<br>Avg: %{customdata}<extra></extra>',
-      customdata: seas.map(s => fmt(s.avg)),
-    }], {
-      ...BASE,
-      height: 260,
-      margin: { t: 8, r: 20, b: 40, l: 55 },
-      xaxis: { ...AXIS, title: 'Season', type: 'category' },
-      yaxis: { ...AXIS, title: 'Runs' },
-    }, CFG);
-
-    // Innings scatter
-    const inn = data.innings_list;
-    const out  = inn.filter(i => i.dismissed);
-    const notO = inn.filter(i => !i.dismissed);
-    Plotly.newPlot('c-p-innings', [
-      {
-        type: 'scatter', mode: 'markers', name: 'Dismissed',
-        x: out.map(i => i.inning_num), y: out.map(i => i.runs),
-        marker: { color: RED, size: 7, opacity: 0.85 },
-        hovertemplate: '%{y} · dismissed<br>%{customdata}<extra></extra>',
-        customdata: out.map(i => i.date),
-      },
-      {
-        type: 'scatter', mode: 'markers', name: 'Not Out',
-        x: notO.map(i => i.inning_num), y: notO.map(i => i.runs),
-        marker: { color: G0, size: 7, opacity: 0.85, symbol: 'diamond' },
-        hovertemplate: '%{y}* · not out<br>%{customdata}<extra></extra>',
-        customdata: notO.map(i => i.date),
-      },
-    ], {
-      ...BASE,
-      height: 260,
-      margin: { t: 8, r: 20, b: 40, l: 55 },
-      xaxis: { ...AXIS, title: 'Innings #' },
-      yaxis: { ...AXIS, title: 'Runs' },
-      legend: { bgcolor: 'transparent', font: { color: '#6b8a70', size: 11 } },
-    }, CFG);
+function renderCaisStats(kind, rows) {
+  const el = document.getElementById(kind === 'batting' ? 'cais-bat-stats' : 'cais-bowl-stats');
+  if (!rows.length) { el.innerHTML = ''; return; }
+  const leader = rows[0];
+  const avg = (rows.reduce((s, r) => s + r.cais, 0) / rows.length).toFixed(1);
+  if (kind === 'batting') {
+    el.innerHTML = `
+      <div class="stat"><div class="stat-label">Players</div><div class="stat-value">${rows.length}</div></div>
+      <div class="stat"><div class="stat-label">Leader CAIS</div><div class="stat-value accent">${leader.cais}</div></div>
+      <div class="stat"><div class="stat-label">Leader</div><div class="stat-value cyan" style="font-size:17px">${leader.batter}</div></div>
+      <div class="stat"><div class="stat-label">Avg CAIS</div><div class="stat-value">${avg}</div></div>`;
   } else {
-    batSec.classList.add('hidden');
-  }
-
-  /* ── Bowling ── */
-  const bwlSec = document.getElementById('bowling-section');
-  if (data.bowling) {
-    const bw = data.bowling;
-    renderStatCards('bowling-cards', [
-      { v: bw.wickets,                              l: 'Wickets' },
-      { v: bw.matches,                              l: 'Matches' },
-      { v: `${Math.floor(bw.balls/6)}.${bw.balls%6}`, l: 'Overs' },
-      { v: fmt(bw.economy),                         l: 'Economy' },
-      { v: fmt(bw.average),                         l: 'Average' },
-    ]);
-    bwlSec.classList.remove('hidden');
-
-    const bs = data.bowling_seasons;
-    Plotly.newPlot('c-p-bowl-seasons', [{
-      type: 'bar',
-      x: bs.map(s => String(s.season)),
-      y: bs.map(s => s.wickets),
-      marker: {
-        color: bs.map((_, i) => {
-          const t = i / Math.max(bs.length - 1, 1);
-          return `rgba(59,130,246,${(0.4 + t * 0.6).toFixed(2)})`;
-        }),
-      },
-      hovertemplate: '<b>%{x}</b><br>Wickets: %{y}<br>Economy: %{customdata}<extra></extra>',
-      customdata: bs.map(s => fmt(s.economy)),
-    }], {
-      ...BASE,
-      height: 260,
-      margin: { t: 8, r: 20, b: 40, l: 55 },
-      xaxis: { ...AXIS, title: 'Season', type: 'category' },
-      yaxis: { ...AXIS, title: 'Wickets' },
-    }, CFG);
-  } else {
-    bwlSec.classList.add('hidden');
+    el.innerHTML = `
+      <div class="stat"><div class="stat-label">Bowlers</div><div class="stat-value">${rows.length}</div></div>
+      <div class="stat"><div class="stat-label">Leader CAIS</div><div class="stat-value accent">${leader.cais}</div></div>
+      <div class="stat"><div class="stat-label">Leader</div><div class="stat-value cyan" style="font-size:17px">${leader.bowler}</div></div>
+      <div class="stat"><div class="stat-label">Avg CAIS</div><div class="stat-value">${avg}</div></div>`;
   }
 }
 
-/* ── CAIS ─────────────────────────────────────────────────── */
-async function loadCais() {
-  const [batData, bowlData] = await Promise.all([
-    apiGet('cais/batting'),
-    apiGet('cais/bowling'),
-  ]);
+function renderCaisBatTable(rows) {
+  const el = document.getElementById('cais-bat-table');
+  const top = rows.slice(0, 20);
+  el.innerHTML = `
+    <thead><tr>
+      <th>#</th><th>Batter</th><th>Team</th>
+      <th class="num" style="text-align:right">CAIS</th>
+      <th class="num" style="text-align:right">Raw SR</th>
+      <th class="num" style="text-align:right">Runs</th>
+      <th class="num" style="text-align:right">Balls</th>
+    </tr></thead>
+    <tbody>
+      ${top.map((r, i) => `
+        <tr class="${i < 3 ? 'top3' : ''}">
+          <td>${i + 1}</td>
+          <td class="name">${r.batter}</td>
+          <td>${r.team ? `<span class="team-tag">${r.team.split(' ').map(w=>w[0]).join('')}</span>` : '—'}</td>
+          <td class="cais">${r.cais}</td>
+          <td class="num">${r.raw_sr}</td>
+          <td class="num">${r.runs ?? '—'}</td>
+          <td class="num">${r.balls}</td>
+        </tr>`).join('')}
+    </tbody>`;
+}
 
-  // ── Batting CAIS bar ──────────────────────────────────────
-  const batTop = batData.slice(0, 20);
-  hBar('c-cais-bat',
-    batTop.map(d => d.batter),
-    batTop.map(d => d.cais),
-    { xTitle: 'CAIS (context-adjusted SR)', height: 520 }
-  );
+function renderCaisBowlTable(rows) {
+  const el = document.getElementById('cais-bowl-table');
+  const top = rows.slice(0, 20);
+  el.innerHTML = `
+    <thead><tr>
+      <th>#</th><th>Bowler</th><th>Role</th><th>Team</th>
+      <th class="num" style="text-align:right">CAIS</th>
+      <th class="num" style="text-align:right">Wkts</th>
+      <th class="num" style="text-align:right">Econ</th>
+    </tr></thead>
+    <tbody>
+      ${top.map((r, i) => `
+        <tr class="${i < 3 ? 'top3' : ''}">
+          <td>${i + 1}</td>
+          <td class="name">${r.bowler}</td>
+          <td><span class="role-${r.role}">${r.role.toUpperCase()}</span></td>
+          <td>${r.team ? `<span class="team-tag">${r.team.split(' ').map(w=>w[0]).join('')}</span>` : '—'}</td>
+          <td class="cais">${r.cais}</td>
+          <td class="num">${r.wickets}</td>
+          <td class="num">${r.economy}</td>
+        </tr>`).join('')}
+    </tbody>`;
+}
 
-  // ── Bowling CAIS bar ─────────────────────────────────────
-  const bowlTop = bowlData.slice(0, 20);
-  hBar('c-cais-bowl',
-    bowlTop.map(d => d.bowler),
-    bowlTop.map(d => d.cais),
-    { xTitle: 'CAIS per over', height: 520 }
-  );
+function renderCaisBatCharts(rows) {
+  const top = rows.slice(0, 20);
+  const colors = top.map(r => r.team ? TEAM_COLOR[r.team] || PAL.amber : PAL.amber);
+  hBar('cais-bat-chart', top.map(r => r.batter), top.map(r => r.cais), {
+    xTitle: 'CAIS', height: 560, colorArr: colors,
+    hovertemplate: '<b>%{y}</b><br>CAIS: %{x}<extra></extra>',
+  });
 
-  // ── Scatter: CAIS vs Raw SR ──────────────────────────────
-  Plotly.newPlot('c-cais-scatter', [{
-    type: 'scatter',
-    mode: 'markers+text',
-    x: batTop.map(d => d.raw_sr),
-    y: batTop.map(d => d.cais),
-    text: batTop.map(d => d.batter.split(' ').pop()),
+  const maxB = Math.max(...top.map(r => r.balls));
+  Plotly.newPlot('cais-bat-scatter', [{
+    type: 'scatter', mode: 'markers+text',
+    x: top.map(r => r.raw_sr),
+    y: top.map(r => r.cais),
+    text: top.map(r => r.batter.split(' ').slice(-2).join(' ')),
     textposition: 'top center',
-    textfont: { size: 10, color: '#6b8a70' },
+    textfont: { size: 10, color: '#a5b2c6' },
     marker: {
-      size: batTop.map(d => Math.sqrt(d.balls) * 1.8),
-      color: batTop.map(d => d.cais - d.raw_sr),
-      colorscale: [[0,'#ef4444'],[0.5,'#f59e0b'],[1,'#22c55e']],
+      size: top.map(r => Math.max(12, Math.sqrt(r.balls / maxB) * 48)),
+      color: top.map(r => r.cais - r.raw_sr),
+      colorscale: [[0, PAL.rose], [0.5, PAL.amber], [1, PAL.emerald]],
       showscale: true,
-      colorbar: { title: 'CAIS − Raw SR', thickness: 12,
-                  tickfont: { color: '#6b8a70' }, titlefont: { color: '#7a9a80' } },
-      line: { width: 0 },
+      colorbar: { title: { text: 'Δ', font: { color: '#a5b2c6' } },
+                  thickness: 12, tickfont: { color: '#a5b2c6' } },
+      line: { color: 'rgba(255,255,255,0.25)', width: 1 },
     },
     hovertemplate: '<b>%{text}</b><br>Raw SR: %{x:.1f}<br>CAIS: %{y:.2f}<extra></extra>',
   }], {
     ...BASE,
     xaxis: { ...AXIS, title: 'Raw Strike Rate' },
     yaxis: { ...AXIS, title: 'CAIS' },
-    shapes: [{  // diagonal: CAIS == raw SR
-      type: 'line', x0: 100, x1: 220, y0: 100, y1: 220,
-      line: { color: '#2a4035', dash: 'dot', width: 1 }
-    }],
     height: 480,
     margin: { l: 60, r: 20, t: 20, b: 60 },
   }, CFG);
+}
 
-  // ── Bowling role split ────────────────────────────────────
-  const paceData = bowlTop.filter(d => d.role === 'pace');
-  const spinData = bowlTop.filter(d => d.role === 'spin');
+function renderCaisBowlCharts(rows) {
+  const top = rows.slice(0, 20);
+  const colors = top.map(r => r.role === 'pace' ? PAL.cyan : PAL.violet);
+  hBar('cais-bowl-chart', top.map(r => r.bowler), top.map(r => r.cais), {
+    xTitle: 'CAIS per over', height: 560, colorArr: colors,
+    hovertemplate: '<b>%{y}</b><br>CAIS: %{x}<extra></extra>',
+  });
 
-  Plotly.newPlot('c-cais-role', [
-    {
-      type: 'bar', name: 'Pace',
-      x: paceData.map(d => d.bowler),
-      y: paceData.map(d => d.cais),
-      marker: { color: '#3b82f6' },
-      hovertemplate: '<b>%{x}</b><br>CAIS: %{y:.2f}<br>Wkts: ' +
-        paceData.map(d => d.wickets).join('/') + '<extra></extra>',
-    },
-    {
-      type: 'bar', name: 'Spin',
-      x: spinData.map(d => d.bowler),
-      y: spinData.map(d => d.cais),
-      marker: { color: '#a78bfa' },
-    },
+  const pace = top.filter(r => r.role === 'pace');
+  const spin = top.filter(r => r.role === 'spin');
+  Plotly.newPlot('cais-bowl-role', [
+    { type: 'bar', name: 'Pace',
+      x: pace.map(r => r.bowler), y: pace.map(r => r.cais),
+      marker: { color: PAL.cyan } },
+    { type: 'bar', name: 'Spin',
+      x: spin.map(r => r.bowler), y: spin.map(r => r.cais),
+      marker: { color: PAL.violet } },
   ], {
     ...BASE,
     barmode: 'group',
     xaxis: { ...AXIS, tickangle: -35 },
     yaxis: { ...AXIS, title: 'CAIS per over' },
-    height: 400,
-    legend: { font: { color: '#d4edd8' } },
-    margin: { l: 60, r: 20, t: 10, b: 120 },
+    height: 420,
+    legend: { font: { color: '#e6ebf3' } },
+    margin: { l: 60, r: 20, t: 10, b: 130 },
   }, CFG);
 }
 
-/* ── Loader map + initial load ────────────────────────────── */
+async function renderCais() {
+  // Fetch both kinds on first load (for current filter)
+  const bat  = caisState.data.batting || await fetchCaisData('batting');
+  const bowl = caisState.data.bowling || await fetchCaisData('bowling');
+
+  const batFilt  = filterByTeam(bat);
+  const bowlFilt = filterByTeam(bowl);
+
+  renderCaisStats('batting', batFilt);
+  renderCaisStats('bowling', bowlFilt);
+  renderCaisBatTable(batFilt);
+  renderCaisBowlTable(bowlFilt);
+  renderCaisBatCharts(batFilt);
+  renderCaisBowlCharts(bowlFilt);
+}
+
+function showCaisPanel(kind) {
+  caisState.mode = kind;
+  document.querySelectorAll('.sub-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.cais === kind));
+  document.getElementById('cais-batting-panel').classList.toggle('hidden', kind !== 'batting');
+  document.getElementById('cais-bowling-panel').classList.toggle('hidden', kind !== 'bowling');
+}
+
+async function loadCais() {
+  await loadSeasons();
+  buildSeasonChips('cais-season-chips', async (s) => {
+    caisState.season = s;
+    caisState.data = { batting: null, bowling: null };
+    await renderCais();
+  });
+  // team chips
+  const tel = document.getElementById('cais-team-chips');
+  tel.innerHTML = '<button class="chip active" data-team="">All</button>' +
+    TEAMS.map(t => `<button class="chip" data-team="${t}">${t.split(' ')[0]}</button>`).join('');
+  tel.querySelectorAll('.chip').forEach(b => {
+    b.onclick = () => {
+      tel.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      b.classList.add('active');
+      caisState.team = b.dataset.team;
+      renderCais();
+    };
+  });
+  // sub-tabs
+  document.querySelectorAll('.sub-tab').forEach(t =>
+    t.onclick = () => showCaisPanel(t.dataset.cais));
+  await renderCais();
+}
+
+/* ══════════════════════════════════════════════════════════
+   BATTING VIEW
+   ══════════════════════════════════════════════════════════ */
+const battingState = { season: '' };
+async function renderBatting() {
+  const [data, sr] = await Promise.all([
+    apiGet('batting',      { season: battingState.season }),
+    apiGet('strike-rates', { season: battingState.season }),
+  ]);
+  const top = data.slice(0, 15);
+  hBar('c-batting-runs', top.map(d => d.batter), top.map(d => d.total_runs),
+       { xTitle: 'Runs', color: PAL.amber, height: 440 });
+  const srTop = sr.slice(0, 15);
+  hBar('c-batting-sr', srTop.map(d => d.batter), srTop.map(d => d.SR),
+       { xTitle: 'Strike Rate', color: PAL.cyan, height: 440 });
+
+  // scatter avg vs SR
+  const rows = data.filter(d => d.average && d.average !== null && d.SR);
+  const maxR = Math.max(...rows.map(r => r.total_runs));
+  Plotly.newPlot('c-batting-scatter', [{
+    type: 'scatter', mode: 'markers',
+    x: rows.map(r => r.average),
+    y: rows.map(r => r.SR),
+    text: rows.map(r => r.batter),
+    marker: {
+      size: rows.map(r => Math.max(8, Math.sqrt(r.total_runs / maxR) * 48)),
+      color: RAINBOW[0], line: { color: '#fff', width: 0.5 },
+    },
+    hovertemplate: '<b>%{text}</b><br>Avg: %{x}<br>SR: %{y}<extra></extra>',
+  }], {
+    ...BASE,
+    xaxis: { ...AXIS, title: 'Batting Average' },
+    yaxis: { ...AXIS, title: 'Strike Rate' },
+    height: 500, margin: { l: 60, r: 20, t: 20, b: 60 },
+  }, CFG);
+}
+async function loadBatting() {
+  await loadSeasons();
+  buildSeasonChips('batting-season-chips', async (s) => {
+    battingState.season = s; await renderBatting();
+  });
+  await renderBatting();
+}
+
+/* ══════════════════════════════════════════════════════════
+   BOWLING VIEW
+   ══════════════════════════════════════════════════════════ */
+const bowlingState = { season: '' };
+async function renderBowling() {
+  const data = await apiGet('bowling', { season: bowlingState.season });
+  const byW = [...data].sort((a,b) => b.wickets - a.wickets).slice(0, 15);
+  hBar('c-bowling-wkts', byW.map(d => d.bowler), byW.map(d => d.wickets),
+       { xTitle: 'Wickets', color: PAL.rose, height: 440 });
+  const byE = [...data].filter(d => d.balls >= 60)
+                        .sort((a,b) => a.economy - b.economy).slice(0, 15);
+  hBar('c-bowling-econ', byE.map(d => d.bowler), byE.map(d => d.economy),
+       { xTitle: 'Economy', color: PAL.emerald, height: 440 });
+
+  const rows = data.filter(d => d.economy && d.wickets);
+  const maxM = Math.max(...rows.map(r => r.matches));
+  Plotly.newPlot('c-bowling-scatter', [{
+    type: 'scatter', mode: 'markers',
+    x: rows.map(r => r.wickets),
+    y: rows.map(r => r.economy),
+    text: rows.map(r => r.bowler),
+    marker: {
+      size: rows.map(r => Math.max(8, Math.sqrt(r.matches / maxM) * 40)),
+      color: rows.map(r => r.economy),
+      colorscale: [[0, PAL.emerald], [0.5, PAL.amber], [1, PAL.rose]],
+      reversescale: false,
+      showscale: true,
+      colorbar: { title: { text: 'Econ', font: { color: '#a5b2c6' } },
+                  thickness: 12, tickfont: { color: '#a5b2c6' } },
+      line: { color: '#fff', width: 0.5 },
+    },
+    hovertemplate: '<b>%{text}</b><br>Wkts: %{x}<br>Econ: %{y}<extra></extra>',
+  }], {
+    ...BASE,
+    xaxis: { ...AXIS, title: 'Wickets' },
+    yaxis: { ...AXIS, title: 'Economy' },
+    height: 500, margin: { l: 60, r: 20, t: 20, b: 60 },
+  }, CFG);
+}
+async function loadBowling() {
+  await loadSeasons();
+  buildSeasonChips('bowling-season-chips', async (s) => {
+    bowlingState.season = s; await renderBowling();
+  });
+  await renderBowling();
+}
+
+/* ══════════════════════════════════════════════════════════
+   RECORDS VIEW (records + teams + dismissals)
+   ══════════════════════════════════════════════════════════ */
+async function loadRecords() {
+  const [scores, cent, teams, dis] = await Promise.all([
+    apiGet('highest-scores'),
+    apiGet('centuries'),
+    apiGet('teams'),
+    apiGet('dismissals'),
+  ]);
+
+  hBar('c-rec-scores', scores.map(s => s.batter), scores.map(s => s.runs),
+       { xTitle: 'Runs', color: PAL.amber,
+         hovertemplate: scores.map(s => `<b>${s.batter}</b><br>${s.runs} vs <i>${s.batting_team}</i><br>${s.date}<extra></extra>`),
+         height: 440 });
+
+  hBar('c-rec-cent', cent.map(c => c.batter), cent.map(c => c.centuries),
+       { xTitle: 'Centuries', color: PAL.violet, height: 440 });
+
+  // Team wins
+  const tColors = teams.map(t => TEAM_COLOR[t.team] || PAL.amber);
+  hBar('c-teams-wins', teams.map(t => t.team), teams.map(t => t.wins),
+       { xTitle: 'Wins', colorArr: tColors, height: 320 });
+  hBar('c-teams-wr', teams.map(t => t.team), teams.map(t => t.win_rate),
+       { xTitle: 'Win rate %', colorArr: tColors, height: 320 });
+
+  // Dismissals pie
+  Plotly.newPlot('c-dis-pie', [{
+    type: 'pie',
+    labels: dis.map(d => d.dismissal_kind),
+    values: dis.map(d => d.count),
+    marker: { colors: RAINBOW, line: { color: CARD_BG, width: 2 } },
+    textinfo: 'label+percent',
+    textfont: { color: '#e6ebf3', size: 11 },
+    hole: 0.4,
+    hovertemplate: '<b>%{label}</b><br>%{value} (%{percent})<extra></extra>',
+  }], {
+    ...BASE,
+    showlegend: false,
+    height: 380, margin: { l: 20, r: 20, t: 20, b: 20 },
+  }, CFG);
+
+  hBar('c-dis-bar', dis.map(d => d.dismissal_kind), dis.map(d => d.count),
+       { xTitle: 'Count',
+         colorArr: dis.map((_, i) => RAINBOW[i % RAINBOW.length]),
+         height: 380 });
+}
+
+/* ══════════════════════════════════════════════════════════
+   PLAYER SEARCH (in top bar)
+   ══════════════════════════════════════════════════════════ */
+let PLAYERS = [];
+async function loadPlayersList() {
+  if (PLAYERS.length) return;
+  PLAYERS = await apiGet('players');
+}
+
+const searchInput = document.getElementById('player-search');
+const searchDropdown = document.getElementById('search-dropdown');
+
+searchInput.addEventListener('focus', loadPlayersList);
+searchInput.addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  if (q.length < 2) { searchDropdown.classList.add('hidden'); return; }
+  const hits = PLAYERS.filter(p => p.toLowerCase().includes(q)).slice(0, 8);
+  if (!hits.length) { searchDropdown.classList.add('hidden'); return; }
+  searchDropdown.innerHTML = hits.map(p =>
+    `<div class="search-result" data-player="${p}">${p}</div>`).join('');
+  searchDropdown.classList.remove('hidden');
+});
+
+searchDropdown.addEventListener('click', e => {
+  const r = e.target.closest('.search-result');
+  if (!r) return;
+  searchInput.value = r.dataset.player;
+  searchDropdown.classList.add('hidden');
+  openPlayer(r.dataset.player);
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) searchDropdown.classList.add('hidden');
+});
+
+async function openPlayer(name) {
+  const modal = document.getElementById('player-modal');
+  document.getElementById('modal-name').textContent = name;
+  document.getElementById('modal-batting').classList.add('hidden');
+  document.getElementById('modal-bowling').classList.add('hidden');
+  document.getElementById('modal-none').classList.add('hidden');
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+
+  // Player profile requires Flask. In static mode, show a helpful note.
+  if (!FLASK) {
+    document.getElementById('modal-none').classList.remove('hidden');
+    document.getElementById('modal-none').innerHTML =
+      '<p>Player profiles need the Flask server (<code>python app.py</code>).<br>' +
+      'On GitHub Pages, browse the aggregate leaderboards instead.</p>';
+    return;
+  }
+
+  const p = await fetch(`/api/player/${encodeURIComponent(name)}`).then(r => r.json());
+
+  if (p.batting) {
+    document.getElementById('modal-batting').classList.remove('hidden');
+    const b = p.batting;
+    document.getElementById('modal-bat-stats').innerHTML = `
+      <div class="stat"><div class="stat-label">Runs</div>  <div class="stat-value accent">${b.total_runs}</div></div>
+      <div class="stat"><div class="stat-label">Avg</div>   <div class="stat-value">${b.average ?? '—'}</div></div>
+      <div class="stat"><div class="stat-label">SR</div>    <div class="stat-value cyan">${b.sr ?? '—'}</div></div>
+      <div class="stat"><div class="stat-label">Highest</div><div class="stat-value emerald">${b.highest}</div></div>
+      <div class="stat"><div class="stat-label">50s/100s</div><div class="stat-value">${b.fifties}/${b.hundreds}</div></div>
+      <div class="stat"><div class="stat-label">Matches</div><div class="stat-value">${b.matches}</div></div>`;
+
+    const seas = p.batting_seasons || [];
+    Plotly.newPlot('modal-bat-seasons', [{
+      type: 'bar',
+      x: seas.map(s => s.season),
+      y: seas.map(s => s.runs),
+      marker: { color: PAL.amber },
+      hovertemplate: '<b>%{x}</b><br>Runs: %{y}<extra></extra>',
+    }], { ...BASE, xaxis: { ...AXIS }, yaxis: { ...AXIS, title: 'Runs' },
+          height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
+
+    const inn = p.innings_list || [];
+    Plotly.newPlot('modal-bat-innings', [{
+      type: 'bar',
+      x: inn.map(i => i.inning_num),
+      y: inn.map(i => i.runs),
+      marker: { color: inn.map(i => i.dismissed ? PAL.rose : PAL.emerald) },
+      hovertemplate: '<b>Inn %{x}</b><br>Runs: %{y}<extra></extra>',
+    }], { ...BASE, xaxis: { ...AXIS, title: 'Innings #' },
+          yaxis: { ...AXIS, title: 'Runs' },
+          height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
+  }
+
+  if (p.bowling) {
+    document.getElementById('modal-bowling').classList.remove('hidden');
+    const b = p.bowling;
+    document.getElementById('modal-bowl-stats').innerHTML = `
+      <div class="stat"><div class="stat-label">Wickets</div> <div class="stat-value accent">${b.wickets}</div></div>
+      <div class="stat"><div class="stat-label">Economy</div> <div class="stat-value cyan">${b.economy ?? '—'}</div></div>
+      <div class="stat"><div class="stat-label">Average</div> <div class="stat-value">${b.average ?? '—'}</div></div>
+      <div class="stat"><div class="stat-label">Matches</div> <div class="stat-value">${b.matches}</div></div>`;
+
+    const seas = p.bowling_seasons || [];
+    Plotly.newPlot('modal-bowl-seasons', [{
+      type: 'bar',
+      x: seas.map(s => s.season),
+      y: seas.map(s => s.wickets),
+      marker: { color: PAL.rose },
+      hovertemplate: '<b>%{x}</b><br>Wkts: %{y}<extra></extra>',
+    }], { ...BASE, xaxis: { ...AXIS }, yaxis: { ...AXIS, title: 'Wickets' },
+          height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
+  }
+
+  if (!p.batting && !p.bowling) {
+    document.getElementById('modal-none').classList.remove('hidden');
+  }
+}
+
+document.getElementById('modal-close').onclick =
+document.getElementById('player-modal').onclick = (e) => {
+  if (e.target.id === 'player-modal' || e.target.id === 'modal-close' || e.target.classList.contains('modal-close')) {
+    document.getElementById('player-modal').classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.getElementById('player-modal').classList.add('hidden');
+    document.body.style.overflow = '';
+    searchDropdown.classList.add('hidden');
+  }
+});
+
+/* ══════════════════════════════════════════════════════════
+   INIT
+   ══════════════════════════════════════════════════════════ */
 const LOADERS = {
-  batting:    loadBatting,
-  bowling:    loadBowling,
-  teams:      loadTeams,
-  records:    loadRecords,
-  dismissals: loadDismissals,
-  players:    loadPlayers,
-  cais:       loadCais,
+  home:     () => {},
+  cais:     loadCais,
+  batting:  loadBatting,
+  bowling:  loadBowling,
+  records:  loadRecords,
 };
 
-loadBatting();
-loaded['batting'] = true;
+// home is active by default; preload player list so search is instant
+loadPlayersList();
+loaded['home'] = true;
 </script>
 
 </body>
