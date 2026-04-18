@@ -106,5 +106,15 @@ def matchup():
     return jsonify(_clean(analyzer.matchup_heatmap()))
 
 
+@app.route('/api/cais/batting')
+def cais_batting():
+    return jsonify(serialize(analyzer.cais_batting(min_balls=50)))
+
+
+@app.route('/api/cais/bowling')
+def cais_bowling():
+    return jsonify(serialize(analyzer.cais_bowling(min_balls=30)))
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

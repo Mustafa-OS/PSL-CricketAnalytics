@@ -340,6 +340,7 @@
   <button class="tab-btn" data-tab="records">Records</button>
   <button class="tab-btn" data-tab="dismissals">Dismissals</button>
   <button class="tab-btn" data-tab="players">Player Search</button>
+  <button class="tab-btn" data-tab="cais">⚡ CAIS</button>
 </nav>
 
 <main class="content">
@@ -491,6 +492,44 @@
     </div>
 
   </div><!-- /players -->
+
+  <!-- ── CAIS ──────────────────────────────────────────────── -->
+  <div id="cais" class="tab-panel">
+
+    <div class="section-sep" style="margin-bottom:8px">Context-Adjusted Impact Score</div>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:24px;max-width:780px">
+      CAIS weights every delivery by match context — game phase (Powerplay / Middle / Death),
+      bowler type (pace vs spin), opposition batter quality tier, rolling form, and in-match pressure.
+      A wicket in the Powerplay by a fast bowler against an elite batter is worth 3× more than a
+      middle-over wicket against a lower-tier batter.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-title">⚡ Batting CAIS — Top 20</div>
+        <div id="c-cais-bat"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">⚡ Bowling CAIS — Top 20</div>
+        <div id="c-cais-bowl"></div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:20px">
+      <div class="card full">
+        <div class="card-title">CAIS vs Raw Strike Rate (Batting) — does context lift or deflate the number?</div>
+        <div id="c-cais-scatter"></div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:20px">
+      <div class="card full">
+        <div class="card-title">Bowling CAIS by Role — Pace vs Spin</div>
+        <div id="c-cais-role"></div>
+      </div>
+    </div>
+
+  </div><!-- /cais -->
 
 </main>
 
@@ -964,6 +1003,90 @@ async function renderPlayerProfile(name) {
   }
 }
 
+/* ── CAIS ─────────────────────────────────────────────────── */
+async function loadCais() {
+  const [batData, bowlData] = await Promise.all([
+    apiGet('cais/batting'),
+    apiGet('cais/bowling'),
+  ]);
+
+  // ── Batting CAIS bar ──────────────────────────────────────
+  const batTop = batData.slice(0, 20);
+  hBar('c-cais-bat',
+    batTop.map(d => d.batter),
+    batTop.map(d => d.cais),
+    { xTitle: 'CAIS (context-adjusted SR)', height: 520 }
+  );
+
+  // ── Bowling CAIS bar ─────────────────────────────────────
+  const bowlTop = bowlData.slice(0, 20);
+  hBar('c-cais-bowl',
+    bowlTop.map(d => d.bowler),
+    bowlTop.map(d => d.cais),
+    { xTitle: 'CAIS per over', height: 520 }
+  );
+
+  // ── Scatter: CAIS vs Raw SR ──────────────────────────────
+  Plotly.newPlot('c-cais-scatter', [{
+    type: 'scatter',
+    mode: 'markers+text',
+    x: batTop.map(d => d.raw_sr),
+    y: batTop.map(d => d.cais),
+    text: batTop.map(d => d.batter.split(' ').pop()),
+    textposition: 'top center',
+    textfont: { size: 10, color: '#6b8a70' },
+    marker: {
+      size: batTop.map(d => Math.sqrt(d.balls) * 1.8),
+      color: batTop.map(d => d.cais - d.raw_sr),
+      colorscale: [[0,'#ef4444'],[0.5,'#f59e0b'],[1,'#22c55e']],
+      showscale: true,
+      colorbar: { title: 'CAIS − Raw SR', thickness: 12,
+                  tickfont: { color: '#6b8a70' }, titlefont: { color: '#7a9a80' } },
+      line: { width: 0 },
+    },
+    hovertemplate: '<b>%{text}</b><br>Raw SR: %{x:.1f}<br>CAIS: %{y:.2f}<extra></extra>',
+  }], {
+    ...BASE,
+    xaxis: { ...AXIS, title: 'Raw Strike Rate' },
+    yaxis: { ...AXIS, title: 'CAIS' },
+    shapes: [{  // diagonal: CAIS == raw SR
+      type: 'line', x0: 100, x1: 220, y0: 100, y1: 220,
+      line: { color: '#2a4035', dash: 'dot', width: 1 }
+    }],
+    height: 480,
+    margin: { l: 60, r: 20, t: 20, b: 60 },
+  }, CFG);
+
+  // ── Bowling role split ────────────────────────────────────
+  const paceData = bowlTop.filter(d => d.role === 'pace');
+  const spinData = bowlTop.filter(d => d.role === 'spin');
+
+  Plotly.newPlot('c-cais-role', [
+    {
+      type: 'bar', name: 'Pace',
+      x: paceData.map(d => d.bowler),
+      y: paceData.map(d => d.cais),
+      marker: { color: '#3b82f6' },
+      hovertemplate: '<b>%{x}</b><br>CAIS: %{y:.2f}<br>Wkts: ' +
+        paceData.map(d => d.wickets).join('/') + '<extra></extra>',
+    },
+    {
+      type: 'bar', name: 'Spin',
+      x: spinData.map(d => d.bowler),
+      y: spinData.map(d => d.cais),
+      marker: { color: '#a78bfa' },
+    },
+  ], {
+    ...BASE,
+    barmode: 'group',
+    xaxis: { ...AXIS, tickangle: -35 },
+    yaxis: { ...AXIS, title: 'CAIS per over' },
+    height: 400,
+    legend: { font: { color: '#d4edd8' } },
+    margin: { l: 60, r: 20, t: 10, b: 120 },
+  }, CFG);
+}
+
 /* ── Loader map + initial load ────────────────────────────── */
 const LOADERS = {
   batting:    loadBatting,
@@ -972,6 +1095,7 @@ const LOADERS = {
   records:    loadRecords,
   dismissals: loadDismissals,
   players:    loadPlayers,
+  cais:       loadCais,
 };
 
 loadBatting();

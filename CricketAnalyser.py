@@ -326,6 +326,186 @@ class PSLAnalyzer:
             'matchups': h2h.to_dict(orient='records'),
         }
 
+    # ── CAIS Engine ──────────────────────────────────────────────────────────
+
+    def _infer_bowler_roles(self):
+        """Return dict {bowler: 'spin'|'pace'} inferred from over distribution."""
+        data = self.legal.copy()
+        if data['over'].min() == 0:
+            data['over'] = data['over'] + 1
+        data['middle'] = data['over'].between(7, 15)
+        role_df = (data.groupby('bowler')['middle']
+                       .agg(['sum', 'count'])
+                       .rename(columns={'sum': 'mid_balls', 'count': 'total_balls'})
+                       .reset_index())
+        role_df['mid_pct'] = role_df['mid_balls'] / role_df['total_balls']
+        role_df['role'] = role_df['mid_pct'].apply(lambda x: 'spin' if x > 0.55 else 'pace')
+        return dict(zip(role_df['bowler'], role_df['role']))
+
+    def _batter_tiers(self):
+        """Return dict {batter: tier_multiplier} based on career avg + SR percentiles."""
+        stats = self.batting_averages(min_innings=5)
+        # Replace inf with NaN for percentile calc
+        avg_vals = stats['average'].replace(np.inf, np.nan)
+        sr_vals  = stats['SR']
+        # Composite score (normalise each to 0-1)
+        avg_n = (avg_vals - avg_vals.min()) / (avg_vals.max() - avg_vals.min() + 1e-9)
+        sr_n  = (sr_vals  - sr_vals.min())  / (sr_vals.max()  - sr_vals.min()  + 1e-9)
+        score = 0.6 * avg_n + 0.4 * sr_n
+        p75 = score.quantile(0.75)
+        p50 = score.quantile(0.50)
+        p25 = score.quantile(0.25)
+        def tier(s):
+            if   s >= p75: return 1.5    # elite
+            elif s >= p50: return 1.2    # good
+            elif s >= p25: return 1.0    # average
+            else:          return 0.75   # lower-tier
+        tiers = score.apply(tier)
+        return dict(zip(stats['batter'], tiers))
+
+    def _batter_form_scores(self, window=3):
+        """Rolling form multiplier per batter (based on last `window` matches before each game)."""
+        data = self.legal.copy()
+        data = data.sort_values('date')
+        inn = (data.groupby(['batter', 'match_id', 'date'])['batsman_runs']
+                   .sum().reset_index())
+        inn = inn.sort_values(['batter', 'date'])
+        # Rolling mean of runs over last `window` innings
+        inn['form_runs'] = (inn.groupby('batter')['batsman_runs']
+                               .transform(lambda x: x.shift(1).rolling(window, min_periods=1).mean()))
+        # Normalise within batter then map to [1.0, 1.45]
+        overall_mean = inn['form_runs'].mean()
+        def form_mult(runs):
+            if pd.isna(runs) or overall_mean == 0:
+                return 1.0
+            ratio = runs / overall_mean
+            return float(np.clip(0.85 + 0.6 * ratio, 1.0, 1.45))
+        inn['form_mult'] = inn['form_runs'].apply(form_mult)
+        return inn.set_index(['batter', 'match_id'])['form_mult'].to_dict()
+
+    def _build_enriched(self):
+        """Enrich legal deliveries with phase, pressure index, and bowler role."""
+        if hasattr(self, '_enriched'):
+            return self._enriched
+        data = self.legal.copy()
+        if data['over'].min() == 0:
+            data['over'] = data['over'] + 1
+
+        # Phase
+        data['phase'] = np.select(
+            [data['over'] <= 6, data['over'] >= 16],
+            ['powerplay', 'death'],
+            default='middle'
+        )
+
+        # Cumulative wickets per innings (match_id + inning)
+        data = data.sort_values(['match_id', 'inning', 'over', 'ball'])
+        data['cum_wickets'] = data.groupby(['match_id', 'inning'])['is_wicket'].cumsum()
+
+        # Simple pressure index: wickets lost / (over / 20) — higher = more pressure
+        data['pressure'] = (data['cum_wickets'] / data['over'].clip(lower=1) * 2).clip(0, 3)
+        data['pressure'] = (1 + data['pressure'] * 0.1).clip(1.0, 1.3)  # scale to [1.0, 1.3]
+
+        # Phase weights for batting (run value per ball)
+        phase_bat_weight = {'powerplay': 1.2, 'middle': 1.0, 'death': 1.3}
+        data['phase_bat_weight'] = data['phase'].map(phase_bat_weight)
+
+        # Phase weights for bowling (run cost penalty)
+        phase_bowl_weight = {'powerplay': 1.2, 'middle': 1.0, 'death': 1.3}
+        data['phase_bowl_weight'] = data['phase'].map(phase_bowl_weight)
+
+        self._enriched = data
+        return data
+
+    def cais_batting(self, min_balls=50):
+        """
+        Context-Adjusted Impact Score — Batting.
+        CAIS = Σ(runs × phase_weight × pressure) / balls × 100
+        """
+        data = self._build_enriched()
+        form_map = self._batter_form_scores()
+
+        rows = []
+        for batter, grp in data.groupby('batter'):
+            if len(grp) < min_balls:
+                continue
+            weighted_runs = (grp['batsman_runs']
+                             * grp['phase_bat_weight']
+                             * grp['pressure']).sum()
+            # Apply average form multiplier across career
+            form_avg = np.mean([form_map.get((batter, mid), 1.0)
+                                for mid in grp['match_id'].unique()])
+            cais = weighted_runs / len(grp) * 100 * form_avg
+            raw_sr = grp['batsman_runs'].sum() / len(grp) * 100
+            rows.append({
+                'batter': batter,
+                'cais': round(float(cais), 2),
+                'raw_sr': round(float(raw_sr), 2),
+                'balls': int(len(grp)),
+                'matches': int(grp['match_id'].nunique()),
+            })
+
+        df = pd.DataFrame(rows).sort_values('cais', ascending=False).reset_index(drop=True)
+        df['rank'] = df.index + 1
+        return df
+
+    def cais_bowling(self, min_balls=30):
+        """
+        Context-Adjusted Impact Score — Bowling.
+        Wicket value  = 30 × phase_role_mult × batter_tier × form_mult × pressure
+        Ball score    = wicket_value − runs_conceded × phase_bowl_weight × 0.5
+        CAIS          = Σ(ball_score) / overs
+        """
+        data = self._build_enriched()
+        roles      = self._infer_bowler_roles()
+        tiers      = self._batter_tiers()
+        form_map   = self._batter_form_scores()
+
+        # Phase × Role wicket multiplier
+        phase_role = {
+            ('pace', 'powerplay'): 2.0,
+            ('pace', 'middle'):    1.2,
+            ('pace', 'death'):     1.8,
+            ('spin', 'powerplay'): 1.5,
+            ('spin', 'middle'):    1.5,
+            ('spin', 'death'):     1.2,
+        }
+
+        rows = []
+        for bowler, grp in data.groupby('bowler'):
+            if len(grp) < min_balls:
+                continue
+            role = roles.get(bowler, 'pace')
+            total_score = 0.0
+            for _, ball in grp.iterrows():
+                phase    = ball['phase']
+                pr_mult  = phase_role.get((role, phase), 1.0)
+                bt_tier  = tiers.get(ball['batter'], 1.0)
+                form_m   = form_map.get((ball['batter'], ball['match_id']), 1.0)
+                pressure = ball['pressure']
+
+                wicket_val = 0.0
+                if ball['is_wicket']:
+                    wicket_val = 30 * pr_mult * bt_tier * form_m * pressure
+
+                run_cost = ball['total_runs'] * ball['phase_bowl_weight'] * 0.5
+                total_score += wicket_val - run_cost
+
+            overs = len(grp) / 6
+            rows.append({
+                'bowler':   bowler,
+                'role':     role,
+                'cais':     round(float(total_score / overs), 2),
+                'wickets':  int(grp['is_wicket'].sum()),
+                'economy':  round(float(grp['total_runs'].sum() / overs), 2),
+                'balls':    int(len(grp)),
+                'matches':  int(grp['match_id'].nunique()),
+            })
+
+        df = pd.DataFrame(rows).sort_values('cais', ascending=False).reset_index(drop=True)
+        df['rank'] = df.index + 1
+        return df
+
     def export_to_csv(self, data, filename):
         """Export dataframe to CSV"""
         data.to_csv(filename, index=False)

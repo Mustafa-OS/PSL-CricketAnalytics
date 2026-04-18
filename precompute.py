@@ -55,6 +55,8 @@ save('players',       sorted(
 save('over-heatmap',  _clean(analyzer.over_heatmap()))
 save('phase-stats',   _clean(analyzer.phase_stats()))
 save('matchup',       _clean(analyzer.matchup_heatmap()))
+save('cais-batting',  serialize(analyzer.cais_batting(min_balls=50)))
+save('cais-bowling',  serialize(analyzer.cais_bowling(min_balls=30)))
 
 centuries_df = analyzer.century_makers()
 counts = (centuries_df.groupby('batter').size()
