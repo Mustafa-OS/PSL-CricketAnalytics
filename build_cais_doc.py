@@ -159,16 +159,18 @@ r.font.color.rgb = SLATE
 
 sub2 = doc.add_paragraph()
 sub2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = sub2.add_run('Full Mathematical Specification & Logic  ·  v2')
+r = sub2.add_run('Full Mathematical Specification & Logic  ·  v3')
 r.font.size = Pt(12); r.font.italic = True
 r.font.color.rgb = MUTED
 
 ver = doc.add_paragraph()
 ver.alignment = WD_ALIGN_PARAGRAPH.CENTER
 r = ver.add_run(
-    'v2 adds chase-pressure (2nd-innings RRR), flipped batting-phase weights '
-    '(powerplay easiest, death hardest), partnership-broken multiplier, '
-    'and early-wicket bonus.'
+    'v3 adds a tournament-stage multiplier (group → QF → SF → final) and, for '
+    'T20 World Cups, an opponent-quality multiplier that distinguishes '
+    'Full Members from qualified associates. v2 previously added chase-pressure, '
+    'flipped batting-phase weights, partnership-broken multiplier, and '
+    'early-wicket bonus.'
 )
 r.font.size = Pt(10); r.font.italic = True
 r.font.color.rgb = MUTED
@@ -182,11 +184,13 @@ doc.add_heading('1.  Overview', level=1)
 add_para(
     "CAIS is a per-delivery weighted metric computed over ball-by-ball T20 data. "
     "Each legal delivery contributes a score that depends not only on its raw outcome "
-    "(runs scored, wicket taken, runs conceded) but on up to SEVEN measurable context signals: "
+    "(runs scored, wicket taken, runs conceded) but on up to NINE measurable context signals: "
     "the phase of the innings, the bowler's role (pace or spin), the quality of the batter "
     "on strike, the batter's recent form, the in-match pressure state (itself a combination "
     "of wicket-loss pressure and 2nd-innings chase pressure), the size of the partnership "
-    "that just got broken (for wickets), and whether the wicket is an early breakthrough. "
+    "that just got broken (for wickets), whether the wicket is an early breakthrough, "
+    "the tournament stage the match was played at (group / QF / SF / final), and — inside "
+    "T20 World Cups only — the quality of the opposition (Full Member vs qualified associate). "
     "Batting CAIS and Bowling CAIS are reported separately."
 )
 
@@ -576,16 +580,136 @@ add_para(
 )
 
 # ═══════════════════════════════════════════════════════════════
+#   8.7  STAGE MULTIPLIER  (v3)
+# ═══════════════════════════════════════════════════════════════
+doc.add_heading('8.7  Stage Multiplier', level=1)
+add_para(
+    "v3 adds a multiplier that rewards runs and wickets produced on higher-stakes "
+    "matches. A 40-ball 60 in a group game is worth less than the same innings in "
+    "a final. Unlike the rest of the multiplier stack, the stage multiplier "
+    "applies to BOTH batting CAIS and bowling CAIS, and on the bowling side it "
+    "scales BOTH the wicket value AND the run cost — leaking runs in a final is "
+    "correspondingly more costly than leaking them in a group match."
+)
+
+doc.add_heading('8.7.1  Inferring stage from match dates', level=2)
+add_para(
+    "Cricsheet's CSV schema stores match_number as a plain integer even for "
+    "knockout matches (no explicit 'Final' / 'Semi-Final' label). v3 therefore "
+    "infers stage from match DATES instead. Within each (competition, season) "
+    "pair, matches are sorted by date descending; the latest match is the Final, "
+    "and the 1–5 matches immediately before it (within a short window) are the "
+    "QF / SF / Eliminator / Qualifier group."
+)
+add_formula("Within each (competition, season):\n"
+            "  rank 0      = Final\n"
+            "  rank 1–3    = Semi / Qualifier / Eliminator  (within 7 days of final)\n"
+            "  rank 4–5    = Quarter / playoff bubble       (within 10 days of final)\n"
+            "  everything else = Group stage")
+add_table(
+    headers=['Stage', 'stage_mult'],
+    rows=[
+        ['Group stage',                                 '1.00'],
+        ['Quarter / playoff bubble (rank 4–5)',         '1.10'],
+        ['Semi / Qualifier / Eliminator (rank 1–3)',    '1.20'],
+        ['Final (rank 0)',                              '1.30'],
+    ],
+    col_widths=[9, 4]
+)
+add_para(
+    "The window constraints (7 days for semis, 10 days for quarters) exist because "
+    "some competitions tack a single exhibition match onto the end of a season — "
+    "without the window, that exhibition would be labelled as the 'final' and the "
+    "real final would become a 'semi'. In practice the ±7-day window cleanly "
+    "captures the knockout block for every supported league."
+)
+
+doc.add_heading('8.7.2  Which competitions get the stage multiplier', level=2)
+add_para(
+    "Only competitions with a genuine knockout structure qualify. These are:"
+)
+add_bullet('PSL, IPL, BBL, CPL, Vitality Blast, The Hundred, SA20, ILT20, MLC, LPL, BPL — all domestic leagues with a recognisable playoff bracket.')
+add_bullet('T20 World Cup — knockout structure is intrinsic to the tournament.')
+add_para(
+    "Men's T20 Internationals (t20is) are deliberately EXCLUDED. Bilateral T20Is "
+    "are a rolling pool of fixtures: the last match of a calendar year is not a "
+    "'final' in any meaningful sense. If the stage ladder were applied to t20is, "
+    "the latest match of every season would get an artificial 1.30× bump."
+)
+
+doc.add_heading('8.7.3  Match-ID collision guard', level=2)
+add_para(
+    "A subtle implementation detail: when a ball-by-ball row belongs to the T20 "
+    "World Cup, that same row also appears inside the raw T20I frame (WC matches "
+    "are a subset of men's T20Is). Both share a match_id. If the stage map were "
+    "keyed on match_id alone, WC knockout bumps would leak into the bilateral "
+    "t20is view. v3 keys the stage map on the tuple (competition, match_id) so "
+    "the two views stay cleanly separated."
+)
+add_formula("stage_map = { (competition, match_id) : stage_mult }     — dict-keyed on BOTH fields\n"
+            "stage_mult(i) = stage_map[(comp(i), match_id(i))]  with default 1.0")
+
+# ═══════════════════════════════════════════════════════════════
+#   8.8  OPPONENT-QUALITY MULTIPLIER  (v3)
+# ═══════════════════════════════════════════════════════════════
+doc.add_heading('8.8  Opponent-Quality Multiplier (World Cups only)', level=1)
+add_para(
+    "The T20 World Cup is unique among the 13 supported competitions because the "
+    "main draw mixes ICC Full Members with qualified associates (Namibia, "
+    "Netherlands, USA, Scotland, UAE, …). A 40-ball 60 by a Full-Member batter "
+    "against a qualified associate attack is not equivalent to a 40-ball 60 "
+    "against a Test-nation attack. v3 corrects for this with an opponent-quality "
+    "multiplier. Everywhere else this multiplier stays at 1.00 — it is a WC-only "
+    "correction."
+)
+
+doc.add_heading('8.8.1  Full Member set', level=2)
+add_para(
+    "The 12 ICC Full Members (the 'Test-playing' nations) are hard-coded:"
+)
+add_formula("FULL_MEMBERS = { Afghanistan, Australia, Bangladesh, England, India,\n"
+            "                 Ireland, New Zealand, Pakistan, South Africa,\n"
+            "                 Sri Lanka, West Indies, Zimbabwe }")
+
+doc.add_heading('8.8.2  Asymmetric weighting', level=2)
+add_para(
+    "The multiplier is asymmetric — it rewards the underdog and softens credit "
+    "for the favourite, in both directions:"
+)
+add_table(
+    headers=['Matchup', 'bat_opponent_mult', 'bowl_opponent_mult'],
+    rows=[
+        ['Full Member vs Full Member',       '1.00',  '1.00'],
+        ['Associate vs Associate',           '1.00',  '1.00'],
+        ['Full Member batter vs associate bowling',  '0.85',  '—'],
+        ['Full Member bowler vs associate batting', '—',     '0.85'],
+        ['Associate batter vs Full Member bowling',  '1.20',  '—'],
+        ['Associate bowler vs Full Member batting', '—',     '1.20'],
+    ],
+    col_widths=[7, 3.5, 3.5]
+)
+add_bullet('A Full-Member top order piling on an associate attack gets 85% credit — still positive, but discounted.')
+add_bullet('An associate batter taking on a Full-Member attack gets a 1.20× uplift — the degree-of-difficulty reward.')
+add_bullet('A Full-Member bowler skittling an associate batting card likewise has their wickets and their run cost both scaled by 0.85.')
+add_bullet('An associate bowler dismissing Test-nation batters gets the 1.20× uplift applied to wicket value AND run cost (so they\'re rewarded for taking wickets against strong batting and lightly forgiven on the runs conceded).')
+
+add_para("A WC "
+         "Pool toggle (surfaced inside the CAIS view's filter bar on the World Cup "
+         "competition only) lets an analyst further restrict the leaderboard to "
+         "Full Members only, if they want the view without any associate-versus-"
+         "Test effects in the numerator at all.", italic=False)
+
+# ═══════════════════════════════════════════════════════════════
 #   9. BATTING CAIS FORMULA
 # ═══════════════════════════════════════════════════════════════
 doc.add_heading('9.  Batting CAIS — Full Formula', level=1)
 add_para("For a batter b with the set of legal deliveries L_b they have faced:")
-add_formula("             Σ  ( rᵢ · phase_bat(oᵢ) · pressure(i) )\n"
+add_formula("             Σ  ( rᵢ · phase_bat(oᵢ) · pressure(i) · stage_mult(i) · bat_opponent_mult(i) )\n"
             "            i∈L_b\n"
-            "CAIS_bat(b) = ─────────────────────────────────────── · 100 · form_avg(b)\n"
-            "                          |L_b|")
+            "CAIS_bat(b) = ───────────────────────────────────────────────────────────────────────── · 100 · form_avg(b)\n"
+            "                                              |L_b|")
 
-add_para("In words: for each ball the batter has faced, multiply the runs scored by the phase-bat weight and the pressure index; sum over the whole career (or season); divide by total balls faced to put it on a per-ball basis; multiply by 100 to express it on a strike-rate scale; finally apply the batter's career-averaged form multiplier once at the end.")
+add_para("In words: for each ball the batter has faced, multiply the runs scored by (a) the phase-bat weight, (b) the combined pressure index, (c) the tournament-stage multiplier, and (d) the WC opponent-quality multiplier; sum over the whole career (or season); divide by total balls faced to put it on a per-ball basis; multiply by 100 to express it on a strike-rate scale; finally apply the batter's career-averaged form multiplier once at the end. Outside the World Cup, bat_opponent_mult = 1.0 on every ball; outside tournament knockouts, stage_mult = 1.0 on every ball.")
 
 add_para("Interpretation cues:", bold=True)
 add_bullet('CAIS > raw SR ⇒ the batter performs disproportionately in hard phases or under pressure, or is chronically in form.')
@@ -600,31 +724,35 @@ add_para("Qualification: min_balls = 50 by default (20 for season-specific leade
 doc.add_heading('10.  Bowling CAIS — Full Formula', level=1)
 add_para("For a bowler B with legal deliveries L_B they have bowled, we first define a per-ball score.")
 
-doc.add_heading('10.1  Per-ball wicket value (v2 — seven factors)', level=2)
+doc.add_heading('10.1  Per-ball wicket value (v3 — nine factors)', level=2)
 add_formula("wicket_value(i) = 30 · phase_role[role(B), phase(oᵢ)]\n"
             "                    · batter_tier(bᵢ)\n"
             "                    · form_mult(bᵢ, mᵢ)\n"
-            "                    · pressure(i)             ← now combined wicket×chase\n"
-            "                    · partnership_mult(i)      ← new in v2\n"
-            "                    · early_wicket_mult(i)     ← new in v2")
-add_para("This value is 0 unless wᵢ = 1 (a wicket fell). The base of 30 calibrates one wicket to roughly one-quarter of a top-phase, elite-batter innings. The seven multiplicative factors each sit in a bounded range, so the final wicket_value is bounded too:")
+            "                    · pressure(i)               ← combined wicket × chase\n"
+            "                    · partnership_mult(i)        ← added in v2\n"
+            "                    · early_wicket_mult(i)       ← added in v2\n"
+            "                    · stage_mult(i)              ← new in v3\n"
+            "                    · bowl_opponent_mult(i)      ← new in v3 (WC only)")
+add_para("This value is 0 unless wᵢ = 1 (a wicket fell). The base of 30 calibrates one wicket to roughly one-quarter of a top-phase, elite-batter innings. The nine multiplicative factors each sit in a bounded range, so the final wicket_value is bounded too:")
 add_table(
     headers=['Factor', 'Range'],
     rows=[
-        ['phase_role',         '1.20 – 2.00'],
-        ['batter_tier',        '0.75 – 1.50'],
-        ['form_mult',          '1.00 – 1.45'],
-        ['pressure (combined)','1.00 – 1.50'],
-        ['partnership_mult',   '1.00 – 1.60'],
-        ['early_wicket_mult',  '1.00 – 1.35'],
+        ['phase_role',            '1.20 – 2.00'],
+        ['batter_tier',           '0.75 – 1.50'],
+        ['form_mult',             '1.00 – 1.45'],
+        ['pressure (combined)',   '1.00 – 1.50'],
+        ['partnership_mult',      '1.00 – 1.60'],
+        ['early_wicket_mult',     '1.00 – 1.35'],
+        ['stage_mult',            '1.00 – 1.30'],
+        ['bowl_opponent_mult',    '0.85 – 1.20 (WC only; 1.00 elsewhere)'],
     ],
-    col_widths=[6, 4]
+    col_widths=[6, 7]
 )
-add_para("Theoretical maximum wicket_value ≈ 30 · 2.00 · 1.50 · 1.45 · 1.50 · 1.60 · 1.35 ≈ 423 — a unicorn ball (pace, powerplay, elite in-form batter dismissed during a big chase collapse after a long partnership, as the first wicket of the innings). Theoretical minimum for a wicket ball ≈ 30 · 1.20 · 0.75 · 1.00 · 1.00 · 1.00 · 1.00 = 27.")
+add_para("Theoretical maximum wicket_value (inside a WC final, associate bowler vs Test batter) ≈ 30 · 2.00 · 1.50 · 1.45 · 1.50 · 1.60 · 1.35 · 1.30 · 1.20 ≈ 660 — the unicorn ball: pace, powerplay, elite in-form Test-nation batter dismissed during a big chase collapse after a long partnership, first wicket of the innings, at a World Cup final, bowled by an associate. Theoretical minimum for a wicket ball ≈ 30 · 1.20 · 0.75 · 1.00 · 1.00 · 1.00 · 1.00 · 1.00 · 0.85 ≈ 23.")
 
 doc.add_heading('10.2  Per-ball run cost', level=2)
-add_formula("run_cost(i) = Rᵢ · phase_bowl(oᵢ) · 0.5")
-add_para("Every ball incurs a cost proportional to runs conceded (bat + extras), scaled by phase-bowl weight and halved. The 0.5 factor prevents raw run bleeding from dominating the metric relative to the wicket-reward side.")
+add_formula("run_cost(i) = Rᵢ · phase_bowl(oᵢ) · 0.5 · stage_mult(i) · bowl_opponent_mult(i)")
+add_para("Every ball incurs a cost proportional to runs conceded (bat + extras), scaled by phase-bowl weight and halved, then further scaled by the stage multiplier and the WC opponent multiplier. The 0.5 factor prevents raw run bleeding from dominating the metric relative to the wicket-reward side. Applying stage and opponent to run_cost as well keeps the ledger symmetric: leaking runs in a final or against a tougher opponent is more costly, in the same proportion that taking wickets in that context is more creditable.")
 
 doc.add_heading('10.3  Aggregation to CAIS', level=2)
 add_formula("             Σ  ( wᵢ · wicket_value(i) − run_cost(i) )\n"
@@ -640,8 +768,8 @@ add_para("Qualification: min_balls = 30 by default (12 for season-specific leade
 # ═══════════════════════════════════════════════════════════════
 doc.add_heading('11.  Worked Examples — single wicket balls', level=1)
 
-doc.add_heading('11.1  Huge-impact wicket', level=2)
-add_para("Scenario: a pace bowler dismisses an elite in-form opener (partnership so far: 52 runs) in the 3rd over of a 2nd-innings chase where the RRR has already climbed to 12.0 because of a scratchy start.")
+doc.add_heading('11.1  Huge-impact wicket (World Cup final)', level=2)
+add_para("Scenario: a T20 World Cup FINAL. An associate pace bowler dismisses an elite in-form Test-nation opener (partnership so far: 52 runs) in the 3rd over of a 2nd-innings chase where the RRR has already climbed to 12.0 because of a scratchy start.")
 add_table(
     headers=['Factor', 'Derivation', 'Value'],
     rows=[
@@ -654,14 +782,36 @@ add_table(
         ['pressure (combined)',     '1.07 · 1.16',                                           '1.24'],
         ['partnership_mult',        '52 runs → 1 + (52−20)·0.012',                           '1.38'],
         ['early_wicket_mult',       'first wicket, balls_in_innings ≤ 18',                   '1.15'],
+        ['stage_mult',              'final (rank 0 within WC season)',                       '1.30'],
+        ['bowl_opponent_mult',      'associate bowler vs Test batter',                       '1.20'],
     ],
     col_widths=[5, 7, 2.5]
 )
-add_formula("wicket_value = 30 · 2.00 · 1.50 · 1.45 · 1.24 · 1.38 · 1.15 ≈ 256.8")
-add_para("This single ball contributes ~257 to the bowler's running total — more than 8× the base wicket value. That's intentional: it's a rare, league-deciding moment, and CAIS is supposed to surface exactly those events.")
+add_formula("wicket_value = 30 · 2.00 · 1.50 · 1.45 · 1.24 · 1.38 · 1.15 · 1.30 · 1.20 ≈ 400.6")
+add_para("This single ball contributes ~401 to the bowler's running total — more than 13× the base wicket value of 30. That's exactly the behaviour v3 is designed to produce: a rare, tournament-deciding moment, compounded across all nine context factors.")
 
-doc.add_heading('11.2  Low-impact wicket', level=2)
-add_para("Same raw outcome — a wicket — but the context is benign: a spinner dismissing a tailender in the 18th over of the 1st innings, after a tiny 8-run last-wicket stand.")
+doc.add_heading('11.2  Same wicket, group-stage bilateral', level=2)
+add_para("Identical match state — same bowler, batter, phase, pressure, partnership, early-wicket flag — except this time it's a group-stage bilateral T20I. Stage and opponent multipliers both fall back to 1.0.")
+add_table(
+    headers=['Factor', 'Derivation', 'Value'],
+    rows=[
+        ['Base',                'constant',                          '30'],
+        ['phase × role',        'pace × powerplay',                  '2.00'],
+        ['batter_tier',         'top quartile',                      '1.50'],
+        ['form_mult',           'capped',                            '1.45'],
+        ['pressure (combined)', 'same',                              '1.24'],
+        ['partnership_mult',    'same',                              '1.38'],
+        ['early_wicket_mult',   'same',                              '1.15'],
+        ['stage_mult',          'bilateral / non-WC → neutral',      '1.00'],
+        ['bowl_opponent_mult',  'non-WC → neutral',                  '1.00'],
+    ],
+    col_widths=[5, 7, 2.5]
+)
+add_formula("wicket_value = 30 · 2.00 · 1.50 · 1.45 · 1.24 · 1.38 · 1.15 · 1.00 · 1.00 ≈ 256.8")
+add_para("Same raw outcome, same in-match context — but without the tournament and opponent uplifts the delivery is worth ~36% less. This is the whole point: stage_mult and bowl_opponent_mult let the engine separate a knockout wicket from a group-stage one, and an associate-vs-Test wicket from a Full-Member-vs-Full-Member one.")
+
+doc.add_heading('11.3  Low-impact wicket', level=2)
+add_para("Benign context: a spinner dismissing a tailender in the 18th over of the 1st innings, after a tiny 8-run last-wicket stand, in a regular-season league game.")
 add_table(
     headers=['Factor', 'Derivation', 'Value'],
     rows=[
@@ -674,18 +824,23 @@ add_table(
         ['pressure (combined)','1.10 · 1.00',                           '1.10'],
         ['partnership_mult',   '8 runs → below 20',                     '1.00'],
         ['early_wicket_mult',  'not first wicket',                      '1.00'],
+        ['stage_mult',         'group stage',                           '1.00'],
+        ['bowl_opponent_mult', 'non-WC',                                '1.00'],
     ],
     col_widths=[5, 7, 2.5]
 )
-add_formula("wicket_value = 30 · 1.20 · 0.75 · 1.00 · 1.10 · 1.00 · 1.00 ≈ 29.7")
-add_para("A near 9× spread between 11.1 and 11.2 for the same raw event (a dismissal) — which is precisely what 'context-adjusted' is supposed to deliver.")
+add_formula("wicket_value = 30 · 1.20 · 0.75 · 1.00 · 1.10 · 1.00 · 1.00 · 1.00 · 1.00 ≈ 29.7")
+add_para("A ~13× spread between 11.1 and 11.3 for the same raw event (a dismissal) — which is precisely what 'context-adjusted' is supposed to deliver.")
 
-doc.add_heading('11.3  Run cost on the same balls', level=2)
-add_para("Both balls above carried 0 runs (the wicket ball had no runs conceded), so the run-cost side of the ledger was 0. On non-wicket balls, run_cost dominates:")
-add_formula("run_cost = runs_conceded · phase_bowl_weight · 0.5\n"
-            "  e.g. a powerplay four: 4 · 1.20 · 0.5 = 2.40\n"
-            "       a middle-overs single: 1 · 1.00 · 0.5 = 0.50\n"
-            "       a death-overs six:     6 · 1.30 · 0.5 = 3.90")
+doc.add_heading('11.4  Run cost on non-wicket balls', level=2)
+add_para("The wicket-ball run cost for all three examples above was 0 (no runs conceded on the wicket ball itself). On non-wicket balls, run_cost dominates the ledger. Note that in v3, run_cost is also scaled by stage and opponent multipliers:")
+add_formula("run_cost = runs_conceded · phase_bowl_weight · 0.5 · stage_mult · bowl_opponent_mult\n"
+            "  regular powerplay four:        4 · 1.20 · 0.5 · 1.00 · 1.00 = 2.40\n"
+            "  middle-overs single:           1 · 1.00 · 0.5 · 1.00 · 1.00 = 0.50\n"
+            "  death-overs six:               6 · 1.30 · 0.5 · 1.00 · 1.00 = 3.90\n"
+            "  death-overs six in a WC final: 6 · 1.30 · 0.5 · 1.30 · 1.00 = 5.07\n"
+            "  full-member conceding to associate at WC:\n"
+            "                                  4 · 1.20 · 0.5 · 1.00 · 0.85 = 2.04  (softened)")
 
 # ═══════════════════════════════════════════════════════════════
 #   12. ENGINEERING NOTES
@@ -707,9 +862,11 @@ add_para(
     "matrix, form floor/ceiling 1.00–1.45, wicket_pressure floor/ceiling 1.00–1.30, "
     "chase_pressure floor/ceiling 1.00–1.30, combined-pressure cap 1.50, partnership "
     "neutral point 20 with slope 0.012 and cap 1.60, early-wicket multipliers 1.35 / "
-    "1.15 / 1.00, tier cutoffs 0.75 / 1.00 / 1.20 / 1.50) were chosen by hand based on "
-    "T20 domain intuition and sanity-checked against PSL data. They are deliberately "
-    "simple and transparent rather than fitted to an external target."
+    "1.15 / 1.00, tier cutoffs 0.75 / 1.00 / 1.20 / 1.50, stage ladder 1.00 / 1.10 / "
+    "1.20 / 1.30, opponent-quality multipliers 0.85 / 1.00 / 1.20) were chosen by hand "
+    "based on T20 domain intuition and sanity-checked across the full 2M-ball dataset. "
+    "They are deliberately simple and transparent rather than fitted to an external "
+    "target."
 )
 add_para("Changes from v1 → v2:", bold=True)
 add_bullet('Batting phase weights flipped: powerplay is now treated as the easiest phase (0.95) and death as the hardest (1.35), replacing v1\'s symmetric 1.2 / 1.0 / 1.3 pattern.')
@@ -718,11 +875,20 @@ add_bullet('Combined pressure cap raised from 1.30 to 1.50 to accommodate the co
 add_bullet('Partnership-broken multiplier added to wicket value.')
 add_bullet('Early-wicket multiplier added to reward first-over breakthroughs.')
 
+add_para("Changes from v2 → v3:", bold=True)
+add_bullet('Tournament-stage multiplier added (1.00 group → 1.10 QF → 1.20 SF → 1.30 final), inferred from match dates because Cricsheet does not label knockout matches explicitly.')
+add_bullet('Stage multiplier restricted to competitions with a real knockout bracket (the 11 supported leagues plus the T20 World Cup). Men\'s T20Is are exempt.')
+add_bullet('Stage map keyed on (competition, match_id) rather than match_id alone — WC matches also appear inside the raw T20I frame under the same match_id, and v2 would have leaked knockout bumps into the bilaterals view.')
+add_bullet('Opponent-quality multiplier added for T20 World Cups: 0.85 when a Full Member plays an associate (softer credit), 1.20 the other way (bonus). Outside the WC, stays at 1.00.')
+add_bullet('The stage and opponent multipliers are the only two factors that apply to BOTH the wicket_value side AND the run_cost side of the bowling ledger — so leaking runs in a final is correspondingly more costly.')
+add_bullet('Batting CAIS picks up both multiplicatively: runs scored in a WC final by an associate vs Full-Member attack can earn up to 1.30 × 1.20 = 1.56× context uplift from these two factors alone, on top of every other multiplier.')
+
 add_para("Natural future extensions:", bold=True)
 add_bullet('Venue adjustment — the same ball at Rawalpindi (flat) is less impressive than at Karachi (slow).')
 add_bullet('Head-to-head calibration — if a specific batter historically dominates a bowler, uplift a wicket from that matchup.')
 add_bullet('First-innings "par score" pressure — estimate par from venue history, penalise batting well under par and reward bowling holding a side under it.')
 add_bullet('ML-backed tier boundaries — replace quartile tiers with a learned rating (Elo, Glicko) for batter quality.')
+add_bullet('Auto-detected rivalry matches (India vs Pakistan, Ashes, etc.) — apply a small additional stage-like bump, since ICC does not classify these as knockouts but they are treated as such by players and audiences.')
 
 add_para("The goal remains explainability: every term in CAIS is a product of transparent, human-interpretable factors. Any ML additions should preserve that property — no black boxes.")
 
