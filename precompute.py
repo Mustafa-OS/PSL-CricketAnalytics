@@ -69,13 +69,14 @@ def save(path, data):
 def build_comp(a: CricketAnalyser, code: str):
     dir_ = code
     print(f'\n── {code} ──')
-    # Career views — higher thresholds keep the leaderboards meaningful.
+    # Career views — moderate thresholds keep leaderboards meaningful without
+    # wiping short-window tournaments like SA20 / ILT20 / MLC / WC.
     save(f'{dir_}/batting.json',
-         serialize(a.batting_averages(min_innings=15, min_runs=400, competition=code)))
+         serialize(a.batting_averages(min_innings=8, min_runs=250, competition=code)))
     save(f'{dir_}/strike-rates.json',
-         serialize(a.strike_rate_analysis(min_balls=300, min_runs=300, competition=code)))
+         serialize(a.strike_rate_analysis(min_balls=150, min_runs=150, competition=code)))
     save(f'{dir_}/bowling.json',
-         serialize(a.bowling_stats(min_balls=120, min_wickets=15, competition=code)))
+         serialize(a.bowling_stats(min_balls=72, min_wickets=8, competition=code)))
     save(f'{dir_}/teams.json',
          serialize(a.team_performance(competition=code)))
     save(f'{dir_}/highest-scores.json',
@@ -93,9 +94,9 @@ def build_comp(a: CricketAnalyser, code: str):
         print(f'  (matchup skipped: {e})')
 
     save(f'{dir_}/cais-batting.json',
-         serialize(a.cais_batting(min_balls=200, min_runs=400, competition=code)))
+         serialize(a.cais_batting(min_balls=100, min_runs=250, competition=code)))
     save(f'{dir_}/cais-bowling.json',
-         serialize(a.cais_bowling(min_balls=120, min_wickets=15, competition=code)))
+         serialize(a.cais_bowling(min_balls=72, min_wickets=8, competition=code)))
 
     # Centuries count per batter
     cent = a.century_makers(competition=code)
@@ -117,15 +118,15 @@ def build_comp(a: CricketAnalyser, code: str):
         si = int(s)
         try:
             save(f'{dir_}/cais-batting-{si}.json',
-                 serialize(a.cais_batting(min_balls=75, min_runs=120, season=si, competition=code)))
+                 serialize(a.cais_batting(min_balls=50, min_runs=75, season=si, competition=code)))
             save(f'{dir_}/cais-bowling-{si}.json',
-                 serialize(a.cais_bowling(min_balls=48, min_wickets=6,  season=si, competition=code)))
+                 serialize(a.cais_bowling(min_balls=30, min_wickets=4, season=si, competition=code)))
             save(f'{dir_}/batting-{si}.json',
-                 serialize(a.batting_averages(min_innings=5, min_runs=120, season=si, competition=code)))
+                 serialize(a.batting_averages(min_innings=4, min_runs=75, season=si, competition=code)))
             save(f'{dir_}/strike-rates-{si}.json',
-                 serialize(a.strike_rate_analysis(min_balls=90, min_runs=120, season=si, competition=code)))
+                 serialize(a.strike_rate_analysis(min_balls=60, min_runs=75, season=si, competition=code)))
             save(f'{dir_}/bowling-{si}.json',
-                 serialize(a.bowling_stats(min_balls=48, min_wickets=6, season=si, competition=code)))
+                 serialize(a.bowling_stats(min_balls=30, min_wickets=4, season=si, competition=code)))
         except Exception as e:
             print(f'  season {si} skipped: {e}')
 

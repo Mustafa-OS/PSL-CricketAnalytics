@@ -104,10 +104,10 @@ def seasons():
 @app.route('/api/batting')
 def batting():
     season = request.args.get('season', type=int)
-    # Career thresholds filter out tail-end noise; per-season thresholds
-    # accept anyone with a realistic workload.
-    mi = 15 if season is None else 5
-    mr = 400 if season is None else 120
+    # Moderate thresholds: keep legitimate contributors, cut only true noise.
+    # Short-window tournaments (SA20, ILT20, MLC, WC) still surface a healthy roster.
+    mi = 8  if season is None else 4
+    mr = 250 if season is None else 75
     return jsonify(serialize(analyzer.batting_averages(
         min_innings=mi, season=season, min_runs=mr, competition=_comp())))
 
@@ -115,8 +115,8 @@ def batting():
 @app.route('/api/strike-rates')
 def strike_rates():
     season = request.args.get('season', type=int)
-    mb = 300 if season is None else 90
-    mr = 300 if season is None else 120
+    mb = 150 if season is None else 60
+    mr = 150 if season is None else 75
     return jsonify(serialize(analyzer.strike_rate_analysis(
         min_balls=mb, season=season, min_runs=mr, competition=_comp())))
 
@@ -124,8 +124,8 @@ def strike_rates():
 @app.route('/api/bowling')
 def bowling():
     season = request.args.get('season', type=int)
-    mb = 120 if season is None else 48
-    mw = 15 if season is None else 6
+    mb = 72 if season is None else 30
+    mw = 8  if season is None else 4
     return jsonify(serialize(analyzer.bowling_stats(
         min_balls=mb, season=season, min_wickets=mw, competition=_comp())))
 
@@ -188,10 +188,10 @@ def matchup():
 @app.route('/api/cais/batting')
 def cais_batting():
     season = request.args.get('season', type=int)
-    # Career: ~200 balls faced + 400 runs keeps bench players off the board.
-    # Season: ~75 balls + 120 runs (≈ a half-decent campaign).
-    default_balls = 200 if season is None else 75
-    default_runs  = 400 if season is None else 120
+    # Moderate thresholds — keep short-tournament regulars (SA20, ILT20, MLC, WC)
+    # visible while still cutting one-and-done cameos.
+    default_balls = 100 if season is None else 50
+    default_runs  = 250 if season is None else 75
     min_balls = request.args.get('min_balls', default=default_balls, type=int)
     min_runs  = request.args.get('min_runs',  default=default_runs,  type=int)
     return jsonify(serialize(analyzer.cais_batting(
@@ -201,8 +201,8 @@ def cais_batting():
 @app.route('/api/cais/bowling')
 def cais_bowling():
     season = request.args.get('season', type=int)
-    default_balls   = 120 if season is None else 48
-    default_wickets = 15  if season is None else 6
+    default_balls   = 72 if season is None else 30
+    default_wickets = 8  if season is None else 4
     min_balls   = request.args.get('min_balls',   default=default_balls,   type=int)
     min_wickets = request.args.get('min_wickets', default=default_wickets, type=int)
     return jsonify(serialize(analyzer.cais_bowling(

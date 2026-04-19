@@ -755,7 +755,7 @@ if __name__ == "__main__":
     analyzer = CricketAnalyser(csv_path)
 
     print("="*60)
-    print("CONTEXT XI — T20 CRICKET ANALYTICS")
+    print("EVERYBALL — T20 CRICKET ANALYTICS")
     print(f"loaded {len(analyzer.df):,} rows from {csv_path}")
     print("="*60)
     

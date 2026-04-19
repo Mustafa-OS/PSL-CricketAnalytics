@@ -1,4 +1,4 @@
-# Context XI — T20 Cricket Analytics
+# EveryBall — T20 Cricket Analytics
 
 Ball-by-ball analytics across every major T20 competition — leagues, men's
 T20 internationals, and T20 World Cups — fronted by **CAIS**, a
