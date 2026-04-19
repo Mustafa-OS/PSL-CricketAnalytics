@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 import numpy as np
 from CricketAnalyser import CricketAnalyser
 
@@ -317,6 +318,17 @@ def main(codes):
             continue
         sub = analyzer.df[analyzer.df['competition'] == code]
         seasons = sorted(sub['season'].dropna().unique().tolist())
+        # Freshness by competition — latest ball-by-ball date we have.
+        # Nightly refresh bumps this whenever cricsheet adds completed matches.
+        latest_match = None
+        if 'date' in sub.columns:
+            try:
+                latest_match = sub['date'].dropna().max()
+                latest_match = (latest_match.isoformat()
+                                if hasattr(latest_match, 'isoformat')
+                                else str(latest_match))
+            except Exception:
+                latest_match = None
         manifest.append({
             'code': code,
             'name': COMP_NAMES.get(code, code.upper()),
@@ -324,11 +336,34 @@ def main(codes):
             'rows': int(len(sub)),
             'first_season': int(seasons[0]) if seasons else None,
             'last_season':  int(seasons[-1]) if seasons else None,
+            'latest_match': latest_match,
         })
         build_comp(analyzer, code)
 
-    save('competitions.json', manifest)
+    # Wrap the manifest with top-level freshness metadata. The UI shows
+    # last_updated under the logo, and the nightly GH Actions workflow
+    # bumps it every run. latest_match is the newest actual match date
+    # in the raw data (some days cricsheet has nothing to publish).
+    latest_match_overall = None
+    try:
+        if 'date' in analyzer.df.columns:
+            m = analyzer.df['date'].dropna().max()
+            latest_match_overall = (m.isoformat()
+                                    if hasattr(m, 'isoformat') else str(m))
+    except Exception:
+        pass
+
+    payload = {
+        'last_updated': datetime.now(timezone.utc)
+                                .replace(microsecond=0)
+                                .isoformat(),
+        'latest_match': latest_match_overall,
+        'competitions': manifest,
+    }
+    save('competitions.json', payload)
     print(f'\n✅ Done — manifest covers {len(manifest)} competitions')
+    print(f'   last_updated = {payload["last_updated"]}')
+    print(f'   latest_match = {latest_match_overall}')
 
 
 if __name__ == '__main__':

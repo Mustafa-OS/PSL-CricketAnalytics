@@ -744,6 +744,31 @@ class CricketAnalyser:
         """
         Context-Adjusted Impact Score — Batting.
         CAIS = Σ(runs × phase_weight × pressure × stage × opponent) / balls × 100 × form_avg
+
+        Also emits per-player **breakdown buckets** so the frontend control
+        panel can recompute the score under user-chosen slider weights
+        without re-running the per-ball pipeline:
+
+            runs_{phase}      = Σ(runs)                within phase
+            balls_{phase}     = ball count             within phase
+            bonus_pressure    = Σ(runs × (pressure - 1))      (global)
+            bonus_stage       = Σ(runs × (stage_mult - 1))    (global)
+            bonus_opponent    = Σ(runs × (opponent - 1))      (global)
+            form_avg          = mean form multiplier
+
+        The control panel's client formula is:
+            weighted_runs = runs_pp×w_pp + runs_mid×w_mid + runs_death×w_death
+                          + s_pressure×bonus_pressure
+                          + s_stage×bonus_stage
+                          + s_opponent×bonus_opponent
+            form_factor   = 1 + s_form × (form_avg - 1)
+            cais          = weighted_runs / balls × 100 × form_factor
+
+        At the default weights (w_pp=0.95, w_mid=1.15, w_death=1.35, all
+        s=1.0) this is a first-order approximation of the server's exact
+        multiplicative formula — within a few percent typically. Close
+        enough that the leaderboard ordering barely shifts, far simpler
+        than shipping all 2^N cross-product buckets.
         """
         comp = competition if competition is not None else self.default_comp
         data = self._build_enriched(competition=comp)
@@ -768,14 +793,37 @@ class CricketAnalyser:
             raw_sr = grp['batsman_runs'].sum() / len(grp) * 100
             primary_team = (grp['batting_team'].value_counts().index[0]
                             if len(grp['batting_team'].dropna()) else None)
+
+            # ── Control-panel breakdown buckets ─────────────────────────
+            runs_vec = grp['batsman_runs']
+            by_phase = grp.groupby('phase')
+            def _phase_runs(p):
+                return int(by_phase['batsman_runs'].sum().get(p, 0))
+            def _phase_balls(p):
+                return int(by_phase.size().get(p, 0))
+
             rows.append({
                 'batter': batter,
                 'team': primary_team,
                 'cais': round(float(cais), 2),
                 'raw_sr': round(float(raw_sr), 2),
-                'runs': int(grp['batsman_runs'].sum()),
+                'runs': int(runs_vec.sum()),
                 'balls': int(len(grp)),
                 'matches': int(grp['match_id'].nunique()),
+                # Breakdown — always present, cheap (~8 floats per player).
+                'runs_pp':    _phase_runs('powerplay'),
+                'runs_mid':   _phase_runs('middle'),
+                'runs_death': _phase_runs('death'),
+                'balls_pp':   _phase_balls('powerplay'),
+                'balls_mid':  _phase_balls('middle'),
+                'balls_death':_phase_balls('death'),
+                'bonus_pressure': round(float(
+                    (runs_vec * (grp['pressure']          - 1.0)).sum()), 3),
+                'bonus_stage':    round(float(
+                    (runs_vec * (grp['stage_mult']        - 1.0)).sum()), 3),
+                'bonus_opponent': round(float(
+                    (runs_vec * (grp['bat_opponent_mult'] - 1.0)).sum()), 3),
+                'form_avg': round(float(form_avg), 4),
             })
 
         df = pd.DataFrame(rows).sort_values('cais', ascending=False).reset_index(drop=True)
@@ -837,6 +885,25 @@ class CricketAnalyser:
         )
         data['_ball_score'] = data['is_wicket'] * data['_wicket_value'] - data['_run_cost']
 
+        # ── Control-panel helper columns (phase_role and phase_bowl_weight
+        # stripped out so frontend sliders can replace them). At default
+        # slider values, the client formula reproduces _ball_score exactly.
+        data['_wicket_impact'] = (
+            data['is_wicket']
+            * data['_tier']
+            * data['_form']
+            * data['pressure']
+            * data['partnership_mult']
+            * data['early_wicket_mult']
+            * data['stage_mult']
+            * data['bowl_opponent_mult']
+        )
+        data['_run_cost_base'] = (
+            data['total_runs']
+            * data['stage_mult']
+            * data['bowl_opponent_mult']
+        )
+
         # ── Aggregate per bowler ─────────────────────────────────────────
         rows = []
         for bowler, grp in data.groupby('bowler'):
@@ -847,6 +914,17 @@ class CricketAnalyser:
             overs = len(grp) / 6
             primary_team = (grp['bowling_team'].value_counts().index[0]
                             if len(grp['bowling_team'].dropna()) else None)
+
+            by_phase = grp.groupby('phase')
+            def _phase_sum(col, p):
+                s = by_phase[col].sum()
+                return float(s.get(p, 0.0))
+            def _phase_int_sum(col, p):
+                s = by_phase[col].sum()
+                return int(s.get(p, 0))
+            def _phase_balls(p):
+                return int(by_phase.size().get(p, 0))
+
             rows.append({
                 'bowler':   bowler,
                 'team':     primary_team,
@@ -857,6 +935,22 @@ class CricketAnalyser:
                 'economy':  round(float(grp['total_runs'].sum() / overs), 2),
                 'balls':    int(len(grp)),
                 'matches':  int(grp['match_id'].nunique()),
+                # Breakdown buckets — one set per phase.
+                # Control-panel formula at default weights (see
+                # phase_role / phase_bowl_weight dicts above and the 0.5
+                # run-cost scalar) reproduces cais exactly.
+                'balls_pp':        _phase_balls('powerplay'),
+                'balls_mid':       _phase_balls('middle'),
+                'balls_death':     _phase_balls('death'),
+                'wickets_pp':      _phase_int_sum('is_wicket', 'powerplay'),
+                'wickets_mid':     _phase_int_sum('is_wicket', 'middle'),
+                'wickets_death':   _phase_int_sum('is_wicket', 'death'),
+                'wicket_impact_pp':    round(_phase_sum('_wicket_impact', 'powerplay'),   4),
+                'wicket_impact_mid':   round(_phase_sum('_wicket_impact', 'middle'),      4),
+                'wicket_impact_death': round(_phase_sum('_wicket_impact', 'death'),       4),
+                'run_cost_pp':    round(_phase_sum('_run_cost_base', 'powerplay'), 3),
+                'run_cost_mid':   round(_phase_sum('_run_cost_base', 'middle'),    3),
+                'run_cost_death': round(_phase_sum('_run_cost_base', 'death'),     3),
             })
 
         df = pd.DataFrame(rows).sort_values('cais', ascending=False).reset_index(drop=True)

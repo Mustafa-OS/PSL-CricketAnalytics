@@ -1,0 +1,6 @@
+# Runtime deps for the Flask dev server and the nightly refresh pipeline.
+# Kept minimal on purpose — everything the browser needs is precomputed JSON,
+# so CI doesn't need plotly / jupyter / docx / etc.
+pandas>=2.0
+numpy>=1.24
+flask>=3.0

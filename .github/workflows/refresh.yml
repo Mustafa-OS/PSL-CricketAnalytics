@@ -1,0 +1,85 @@
+# Nightly dataset refresh.
+#
+# Cricsheet doesn't offer a live per-match push API — the closest public
+# source is their daily-refreshed ZIP bundles (per-competition, rebuilt a
+# few hours after stumps). So every night at 00:00 UTC we:
+#
+#   1. ingest.py  — re-download every Cricsheet zip, rebuild data/*.csv
+#                   and data/all.csv.
+#   2. precompute.py — rebuild every JSON under static/data/ (including
+#                      competitions.json, which carries the freshness
+#                      timestamp shown in the header badge).
+#   3. commit & push the regenerated static/data/ files.
+#
+# The push to static/** fires .github/workflows/pages.yml, which rebuilds
+# the GitHub Pages site. So "it just shows up" for the user next morning.
+#
+# Raw zips (data/raw/) and the big CSVs (data/*.csv, data/*.parquet) are
+# gitignored — only the lightweight JSONs under static/data/ get pushed.
+
+name: Nightly dataset refresh
+
+on:
+  schedule:
+    # 00:00 UTC every day. Cricsheet usually has the previous day's matches
+    # indexed by then; if a late-night fixture slips past the cutoff it'll
+    # land on the following night's run.
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+# One refresh at a time. If a previous run is still going (e.g. ingest was
+# slow), don't stomp on it — the next scheduled tick will catch up.
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # needed to push the regenerated JSONs back to main
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Use the default GITHUB_TOKEN — the commit+push back to main
+          # is fine with the repo-scoped token for private/public alike.
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ingest Cricsheet zips
+        run: python ingest.py
+
+      - name: Rebuild static JSONs
+        run: python precompute.py
+
+      - name: Commit and push if JSONs changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Only the static JSON bundle is tracked — the big CSVs under
+          # data/ are gitignored, so `git add static/data` is enough.
+          git add static/data
+
+          if git diff --cached --quiet; then
+            echo "No dataset changes — nothing to commit."
+            exit 0
+          fi
+
+          TS=$(date -u +"%Y-%m-%d")
+          git commit -m "chore(data): nightly refresh ${TS}"
+          git push

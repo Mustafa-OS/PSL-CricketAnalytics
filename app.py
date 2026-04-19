@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, render_template, request
 from urllib.parse import unquote
+from datetime import datetime, timezone
 import os
 import numpy as np
 import pandas as pd
@@ -72,7 +73,11 @@ def index():
 
 @app.route('/api/competitions')
 def competitions():
-    """Return available competitions with row & match counts."""
+    """Return available competitions + global freshness metadata.
+
+    Shape mirrors static/data/competitions.json so the frontend can
+    treat Flask and static fetches identically.
+    """
     out = []
     df = analyzer.df
     for code, name in COMP_NAMES.items():
@@ -80,6 +85,14 @@ def competitions():
         if not len(sub):
             continue
         seasons = sorted(sub['season'].dropna().unique().tolist())
+        latest_match = None
+        if 'date' in sub.columns:
+            try:
+                m = sub['date'].dropna().max()
+                latest_match = (m.isoformat()
+                                if hasattr(m, 'isoformat') else str(m))
+            except Exception:
+                latest_match = None
         out.append({
             'code': code,
             'name': name,
@@ -88,8 +101,24 @@ def competitions():
             'seasons': [int(s) for s in seasons],
             'first_season': int(seasons[0]) if seasons else None,
             'last_season':  int(seasons[-1]) if seasons else None,
+            'latest_match': latest_match,
         })
-    return jsonify(out)
+
+    latest_match_overall = None
+    try:
+        if 'date' in df.columns:
+            m = df['date'].dropna().max()
+            latest_match_overall = (m.isoformat()
+                                    if hasattr(m, 'isoformat') else str(m))
+    except Exception:
+        pass
+
+    return jsonify({
+        'last_updated': datetime.now(timezone.utc)
+                                .replace(microsecond=0).isoformat(),
+        'latest_match': latest_match_overall,
+        'competitions': out,
+    })
 
 
 @app.route('/api/seasons')

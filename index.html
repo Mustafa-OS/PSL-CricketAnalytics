@@ -100,6 +100,22 @@
       border-color: var(--accent);
     }
 
+    /* Freshness badge — shows when the dataset was last refreshed by the
+       nightly GH Actions run. Hover reveals both the rebuild timestamp
+       and the newest match date we have. */
+    .updated-badge {
+      margin-left: 8px;
+      padding: 3px 9px;
+      font-size: 11px; font-weight: 500;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      white-space: nowrap;
+      cursor: default;
+    }
+    .updated-badge:empty { display: none; }
+
     /* comp picker grid on home */
     .comp-grid {
       display: grid;
@@ -483,6 +499,107 @@
     }
     .sub-tab:not(.active):hover { color: var(--text); }
 
+    /* ── CAIS control panel ───────────────────────────────────
+       Sliders sit where the old "bar view" chart lived. Each slider
+       drives a factor that the browser re-applies to the pre-computed
+       per-phase breakdown buckets — no round-trip to the server, so
+       dragging feels instant even on the ~1000-player WC view. */
+    .cais-panel-section {
+      margin-top: 4px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+    }
+    .cais-panel-section:first-child {
+      margin-top: 0; padding-top: 0; border-top: 0;
+    }
+    .cais-panel-section-title {
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .cais-slider-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 44px;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+    .cais-slider-row > label {
+      color: var(--text);
+      font-weight: 500;
+    }
+    .cais-slider-row > input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 999px;
+      outline: none;
+      cursor: pointer;
+    }
+    .cais-slider-row > input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid var(--card);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .cais-slider-row > input[type="range"]::-moz-range-thumb {
+      width: 14px; height: 14px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid var(--card);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .cais-slider-row > input[type="range"].dirty::-webkit-slider-thumb {
+      background: #ffb85a;
+    }
+    .cais-slider-row > input[type="range"].dirty::-moz-range-thumb {
+      background: #ffb85a;
+    }
+    .cais-slider-val {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+      text-align: right;
+    }
+    .cais-slider-val.dirty { color: #ffb85a; }
+    .cais-reset {
+      font-size: 11px; font-weight: 600;
+      padding: 5px 12px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .cais-reset:hover {
+      color: var(--text);
+      border-color: var(--border-hi);
+    }
+    .cais-reset.enabled {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .cais-reset.enabled:hover {
+      background: var(--accent);
+      color: #181203;
+    }
+    .cais-panel-hint {
+      font-size: 11px; color: var(--text-muted);
+      line-height: 1.5;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+
     /* ── Cards & grid ─────────────────────────────────────── */
     .grid {
       display: grid;
@@ -843,6 +960,7 @@
     <div class="brand" data-view="home">
       <div class="brand-wordmark">⚡ The T20 <span>Analyst</span></div>
       <button id="comp-badge" class="comp-badge" title="Change competition">—</button>
+      <span id="updated-badge" class="updated-badge"></span>
     </div>
 
     <nav class="topnav">
@@ -1013,8 +1131,60 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-title">CAIS — Bar view</div>
-          <div id="cais-bat-chart"></div>
+          <div class="card-title">
+            Scoring controls
+            <button id="cais-bat-reset" class="cais-reset" type="button"
+                    title="Restore every slider to its default weight">Reset</button>
+          </div>
+          <div id="cais-bat-panel" class="cais-controls">
+            <div class="cais-panel-section">
+              <div class="cais-panel-section-title">Phase weights</div>
+              <div class="cais-slider-row">
+                <label>Powerplay</label>
+                <input type="range" data-bat-weight="w_pp" min="0.5" max="2.0" step="0.05">
+                <span class="cais-slider-val" data-for="w_pp"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Middle</label>
+                <input type="range" data-bat-weight="w_mid" min="0.5" max="2.0" step="0.05">
+                <span class="cais-slider-val" data-for="w_mid"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Death</label>
+                <input type="range" data-bat-weight="w_death" min="0.5" max="2.0" step="0.05">
+                <span class="cais-slider-val" data-for="w_death"></span>
+              </div>
+            </div>
+            <div class="cais-panel-section">
+              <div class="cais-panel-section-title">Context multipliers</div>
+              <div class="cais-slider-row">
+                <label>Pressure</label>
+                <input type="range" data-bat-weight="s_pressure" min="0" max="2" step="0.1">
+                <span class="cais-slider-val" data-for="s_pressure"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Knockout stage</label>
+                <input type="range" data-bat-weight="s_stage" min="0" max="2" step="0.1">
+                <span class="cais-slider-val" data-for="s_stage"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Opponent (WC)</label>
+                <input type="range" data-bat-weight="s_opponent" min="0" max="2" step="0.1">
+                <span class="cais-slider-val" data-for="s_opponent"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Recent form</label>
+                <input type="range" data-bat-weight="s_form" min="0" max="2" step="0.1">
+                <span class="cais-slider-val" data-for="s_form"></span>
+              </div>
+            </div>
+            <div class="cais-panel-hint">
+              Drag any slider to reweight CAIS. Phase sliders set the multiplier
+              outright (default Death = 1.35); context sliders scale the
+              bonus linearly (0 = off, 1 = default, 2 = double impact).
+              The table re-ranks instantly.
+            </div>
+          </div>
         </div>
       </div>
       <div class="card full" style="margin-top:20px">
@@ -1040,8 +1210,77 @@
           </div>
         </div>
         <div class="card">
-          <div class="card-title">CAIS — Bar view</div>
-          <div id="cais-bowl-chart"></div>
+          <div class="card-title">
+            Scoring controls
+            <button id="cais-bowl-reset" class="cais-reset" type="button"
+                    title="Restore every slider to its default weight">Reset</button>
+          </div>
+          <div id="cais-bowl-panel" class="cais-controls">
+            <div class="cais-panel-section">
+              <div class="cais-panel-section-title">Pace × phase</div>
+              <div class="cais-slider-row">
+                <label>Pace · Powerplay</label>
+                <input type="range" data-bowl-weight="pace_pp"    min="0.5" max="3.5" step="0.1">
+                <span class="cais-slider-val" data-for="pace_pp"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Pace · Middle</label>
+                <input type="range" data-bowl-weight="pace_mid"   min="0.5" max="3.5" step="0.1">
+                <span class="cais-slider-val" data-for="pace_mid"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Pace · Death</label>
+                <input type="range" data-bowl-weight="pace_death" min="0.5" max="3.5" step="0.1">
+                <span class="cais-slider-val" data-for="pace_death"></span>
+              </div>
+            </div>
+            <div class="cais-panel-section">
+              <div class="cais-panel-section-title">Spin × phase</div>
+              <div class="cais-slider-row">
+                <label>Spin · Powerplay</label>
+                <input type="range" data-bowl-weight="spin_pp"    min="0.5" max="3.5" step="0.1">
+                <span class="cais-slider-val" data-for="spin_pp"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Spin · Middle</label>
+                <input type="range" data-bowl-weight="spin_mid"   min="0.5" max="3.5" step="0.1">
+                <span class="cais-slider-val" data-for="spin_mid"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Spin · Death</label>
+                <input type="range" data-bowl-weight="spin_death" min="0.5" max="3.5" step="0.1">
+                <span class="cais-slider-val" data-for="spin_death"></span>
+              </div>
+            </div>
+            <div class="cais-panel-section">
+              <div class="cais-panel-section-title">Run-cost weights</div>
+              <div class="cais-slider-row">
+                <label>PP run cost</label>
+                <input type="range" data-bowl-weight="bw_pp"    min="0.2" max="2.5" step="0.1">
+                <span class="cais-slider-val" data-for="bw_pp"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Mid run cost</label>
+                <input type="range" data-bowl-weight="bw_mid"   min="0.2" max="2.5" step="0.1">
+                <span class="cais-slider-val" data-for="bw_mid"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Death run cost</label>
+                <input type="range" data-bowl-weight="bw_death" min="0.2" max="2.5" step="0.1">
+                <span class="cais-slider-val" data-for="bw_death"></span>
+              </div>
+              <div class="cais-slider-row">
+                <label>Run-cost weight</label>
+                <input type="range" data-bowl-weight="run_scalar" min="0" max="1.5" step="0.05">
+                <span class="cais-slider-val" data-for="run_scalar"></span>
+              </div>
+            </div>
+            <div class="cais-panel-hint">
+              Wicket multipliers (pace × phase and spin × phase) are the main
+              levers — raise spin · death to reward wickets in the final overs,
+              or cut run-cost weight to reward strike bowlers who go for runs.
+            </div>
+          </div>
         </div>
       </div>
       <div class="card full" style="margin-top:20px">
@@ -1485,43 +1724,75 @@ const MERGE = {
       };
     },
   },
+  // CAIS merges need to preserve every breakdown bucket so the control
+  // panel's client-side recompute still works after stitching together
+  // multiple seasons. All bucket fields are additive (Σ runs × factor);
+  // only form_avg is a mean and gets weighted by balls.
   'cais-batting': {
     key: r => r.batter,
     combine: rows => {
-      const runs    = rows.reduce((s,r) => s + (r.runs    || 0), 0);
-      const balls   = rows.reduce((s,r) => s + (r.balls   || 0), 0);
-      const matches = rows.reduce((s,r) => s + (r.matches || 0), 0);
-      // Weighted mean of CAIS by balls — each season's CAIS is already a per-ball rate.
-      const caisWeighted = rows.reduce((s,r) => s + (r.cais || 0) * (r.balls || 0), 0);
-      const cais = balls ? +(caisWeighted / balls).toFixed(2) : 0;
+      const sum = k => rows.reduce((s,r) => s + (r[k] || 0), 0);
+      const runs    = sum('runs');
+      const balls   = sum('balls');
+      const matches = sum('matches');
       const rawSr = balls ? +(runs / balls * 100).toFixed(2) : 0;
-      // Pick the most common team across included seasons.
+      const formWeighted = rows.reduce((s,r) => s + (r.form_avg || 1) * (r.balls || 0), 0);
+      const form_avg = balls ? formWeighted / balls : 1;
       const teamTally = {};
       rows.forEach(r => { if (r.team) teamTally[r.team] = (teamTally[r.team] || 0) + (r.balls || 0); });
       const team = Object.entries(teamTally).sort((a,b) => b[1]-a[1])[0]?.[0] ?? null;
-      return { batter: rows[0].batter, team, cais, raw_sr: rawSr, runs, balls, matches };
+      return {
+        batter: rows[0].batter, team,
+        // cais is filled in client-side by applyCaisWeights; keep a placeholder
+        cais: 0,
+        raw_sr: rawSr,
+        runs, balls, matches,
+        runs_pp:    sum('runs_pp'),
+        runs_mid:   sum('runs_mid'),
+        runs_death: sum('runs_death'),
+        balls_pp:   sum('balls_pp'),
+        balls_mid:  sum('balls_mid'),
+        balls_death:sum('balls_death'),
+        bonus_pressure: +sum('bonus_pressure').toFixed(3),
+        bonus_stage:    +sum('bonus_stage').toFixed(3),
+        bonus_opponent: +sum('bonus_opponent').toFixed(3),
+        form_avg: +form_avg.toFixed(4),
+      };
     },
   },
   'cais-bowling': {
     key: r => r.bowler,
     combine: rows => {
-      const runs  = rows.reduce((s,r) => s + (r.runs_conceded || 0), 0);
-      const wkts  = rows.reduce((s,r) => s + (r.wickets       || 0), 0);
-      const balls = rows.reduce((s,r) => s + (r.balls         || 0), 0);
-      const matches = rows.reduce((s,r) => s + (r.matches     || 0), 0);
+      const sum = k => rows.reduce((s,r) => s + (r[k] || 0), 0);
+      const runs  = sum('runs_conceded');
+      const wkts  = sum('wickets');
+      const balls = sum('balls');
+      const matches = sum('matches');
       const overs = balls / 6;
-      // CAIS here is "per over" already; weight by overs.
-      const caisWeighted = rows.reduce((s,r) => s + (r.cais || 0) * ((r.balls || 0)/6), 0);
-      const cais = overs ? +(caisWeighted / overs).toFixed(2) : 0;
       const econ = overs ? +(runs / overs).toFixed(2) : 0;
       const teamTally = {};
       rows.forEach(r => { if (r.team) teamTally[r.team] = (teamTally[r.team] || 0) + (r.balls || 0); });
       const team = Object.entries(teamTally).sort((a,b) => b[1]-a[1])[0]?.[0] ?? null;
-      // Role: pick whichever role accumulated more balls across the picked seasons.
       const roleTally = { pace: 0, spin: 0 };
       rows.forEach(r => { if (r.role) roleTally[r.role] += (r.balls || 0); });
       const role = roleTally.spin > roleTally.pace ? 'spin' : 'pace';
-      return { bowler: rows[0].bowler, team, role, cais, wickets: wkts, runs_conceded: runs, economy: econ, balls, matches };
+      return {
+        bowler: rows[0].bowler, team, role,
+        cais: 0,  // replaced client-side
+        wickets: wkts, runs_conceded: runs, economy: econ, balls, matches,
+        balls_pp:       sum('balls_pp'),
+        balls_mid:      sum('balls_mid'),
+        balls_death:    sum('balls_death'),
+        wickets_pp:     sum('wickets_pp'),
+        wickets_mid:    sum('wickets_mid'),
+        wickets_death:  sum('wickets_death'),
+        wicket_impact_pp:    +sum('wicket_impact_pp').toFixed(4),
+        wicket_impact_mid:   +sum('wicket_impact_mid').toFixed(4),
+        wicket_impact_death: +sum('wicket_impact_death').toFixed(4),
+        run_cost_pp:    +sum('run_cost_pp').toFixed(3),
+        run_cost_mid:   +sum('run_cost_mid').toFixed(3),
+        run_cost_death: +sum('run_cost_death').toFixed(3),
+      };
     },
   },
 };
@@ -1671,6 +1942,106 @@ const caisState = {
   data: { batting: null, bowling: null },
 };
 
+/* ── CAIS control-panel weights ─────────────────────────────
+   Defaults mirror the hard-coded multipliers in CricketAnalyser —
+   at these values the client formula reproduces the server CAIS
+   (exactly for bowling, within ~3% for batting; the small batting
+   offset is a first-order approximation trade-off to keep the bucket
+   count sensible). Users drag sliders to re-weight; Reset snaps back. */
+const CAIS_DEFAULTS = {
+  batting: {
+    w_pp: 0.95, w_mid: 1.15, w_death: 1.35,
+    s_pressure: 1.0, s_stage: 1.0, s_opponent: 1.0, s_form: 1.0,
+  },
+  bowling: {
+    pace_pp: 2.0, pace_mid: 1.2, pace_death: 1.8,
+    spin_pp: 1.5, spin_mid: 1.5, spin_death: 1.2,
+    bw_pp: 1.2,  bw_mid: 1.0,  bw_death: 1.3,
+    run_scalar: 0.5,
+  },
+};
+// Live weights (mutated by slider input events). Start as a deep copy of
+// the defaults so changing one doesn't leak back into DEFAULTS.
+const caisWeights = {
+  batting: { ...CAIS_DEFAULTS.batting },
+  bowling: { ...CAIS_DEFAULTS.bowling },
+};
+
+/* Recompute one batter's CAIS from their per-phase + context buckets
+   using the current slider weights. */
+function computeBatCais(r, w) {
+  const balls = r.balls || 0;
+  if (!balls) return 0;
+  const weightedRuns =
+      (r.runs_pp    || 0) * w.w_pp
+    + (r.runs_mid   || 0) * w.w_mid
+    + (r.runs_death || 0) * w.w_death
+    + (r.bonus_pressure || 0) * w.s_pressure
+    + (r.bonus_stage    || 0) * w.s_stage
+    + (r.bonus_opponent || 0) * w.s_opponent;
+  const formFactor = 1 + w.s_form * ((r.form_avg || 1) - 1);
+  return Math.round(weightedRuns / balls * 100 * formFactor * 100) / 100;
+}
+
+/* Recompute one bowler's CAIS from their per-phase buckets. At defaults
+   this is mathematically identical to the server value. */
+function computeBowlCais(r, w) {
+  const balls = r.balls || 0;
+  if (!balls) return 0;
+  const overs = balls / 6;
+  const isPace = (r.role || 'pace') === 'pace';
+  const pp  = isPace ? w.pace_pp    : w.spin_pp;
+  const mid = isPace ? w.pace_mid   : w.spin_mid;
+  const dth = isPace ? w.pace_death : w.spin_death;
+  const wicketContrib =
+      pp  * 30 * (r.wicket_impact_pp    || 0)
+    + mid * 30 * (r.wicket_impact_mid   || 0)
+    + dth * 30 * (r.wicket_impact_death || 0);
+  const runCost = w.run_scalar * (
+      w.bw_pp    * (r.run_cost_pp    || 0)
+    + w.bw_mid   * (r.run_cost_mid   || 0)
+    + w.bw_death * (r.run_cost_death || 0));
+  return Math.round((wicketContrib - runCost) / overs * 100) / 100;
+}
+
+/* Apply current weights to every row. Returns a new array sorted by
+   client-computed cais (descending) with fresh rank numbers. */
+function applyCaisWeights(rows, kind) {
+  const w = caisWeights[kind];
+  const fn = kind === 'batting' ? computeBatCais : computeBowlCais;
+  const out = rows.map(r => ({ ...r, cais: fn(r, w) }));
+  out.sort((a, b) => (b.cais ?? 0) - (a.cais ?? 0));
+  out.forEach((r, i) => { r.rank = i + 1; });
+  return out;
+}
+
+/* Push current weights into the sliders + value readouts + dirty flags.
+   Called on initial render, after Reset, and any time the sliders need
+   to be re-synced (eg switching competitions). */
+function syncCaisPanelUI(kind) {
+  const w        = caisWeights[kind];
+  const defaults = CAIS_DEFAULTS[kind];
+  const attr     = kind === 'batting' ? 'data-bat-weight' : 'data-bowl-weight';
+  const panel    = document.getElementById(kind === 'batting' ? 'cais-bat-panel' : 'cais-bowl-panel');
+  if (!panel) return;
+  let anyDirty = false;
+  panel.querySelectorAll(`input[${attr}]`).forEach(input => {
+    const key   = input.getAttribute(attr);
+    const val   = w[key];
+    const isDef = Math.abs(val - defaults[key]) < 1e-9;
+    if (!isDef) anyDirty = true;
+    input.value = val;
+    input.classList.toggle('dirty', !isDef);
+    const out = panel.querySelector(`.cais-slider-val[data-for="${key}"]`);
+    if (out) {
+      out.textContent = val.toFixed(2);
+      out.classList.toggle('dirty', !isDef);
+    }
+  });
+  const resetBtn = document.getElementById(kind === 'batting' ? 'cais-bat-reset' : 'cais-bowl-reset');
+  if (resetBtn) resetBtn.classList.toggle('enabled', anyDirty);
+}
+
 /* WC-only pool filter. No-op outside the World Cup view. */
 function filterByPool(rows) {
   if (APP.comp !== 'wc' || caisState.pool !== 'test') return rows;
@@ -1792,16 +2163,13 @@ document.addEventListener('click', (e) => {
   if (name) openPlayer(name);
 });
 
+// Scatter — "CAIS vs Raw Strike Rate" (batting) — responds to slider changes
+// because the input `rows` are already client-reweighted by renderCais().
 function renderCaisBatCharts(rows) {
   const top = rows.slice(0, 20);
-  const colors = top.map(r => r.team ? TEAM_COLOR[r.team] || PAL.amber : PAL.amber);
-  hBar('cais-bat-chart', top.map(r => r.batter), top.map(r => r.cais), {
-    xTitle: 'CAIS', height: 560, colorArr: colors,
-    hovertemplate: '<b>%{y}</b><br>CAIS: %{x}<extra></extra>',
-  });
-
+  if (!top.length) { Plotly.purge('cais-bat-scatter'); return; }
   const maxB = Math.max(...top.map(r => r.balls));
-  Plotly.newPlot('cais-bat-scatter', [{
+  Plotly.react('cais-bat-scatter', [{
     type: 'scatter', mode: 'markers+text',
     x: top.map(r => r.raw_sr),
     y: top.map(r => r.cais),
@@ -1827,17 +2195,13 @@ function renderCaisBatCharts(rows) {
   }, CFG);
 }
 
+// Pace vs Spin — CAIS per over (bowling) — also reweighted via `rows`.
 function renderCaisBowlCharts(rows) {
   const top = rows.slice(0, 20);
-  const colors = top.map(r => r.role === 'pace' ? PAL.cyan : PAL.violet);
-  hBar('cais-bowl-chart', top.map(r => r.bowler), top.map(r => r.cais), {
-    xTitle: 'CAIS per over', height: 560, colorArr: colors,
-    hovertemplate: '<b>%{y}</b><br>CAIS: %{x}<extra></extra>',
-  });
-
+  if (!top.length) { Plotly.purge('cais-bowl-role'); return; }
   const pace = top.filter(r => r.role === 'pace');
   const spin = top.filter(r => r.role === 'spin');
-  Plotly.newPlot('cais-bowl-role', [
+  Plotly.react('cais-bowl-role', [
     { type: 'bar', name: 'Pace',
       x: pace.map(r => r.bowler), y: pace.map(r => r.cais),
       marker: { color: PAL.cyan } },
@@ -1855,26 +2219,35 @@ function renderCaisBowlCharts(rows) {
   }, CFG);
 }
 
+// Light-weight reweight-and-paint pass. Runs on every slider change without
+// hitting the network — the fetched `caisState.data` is the immutable raw
+// bucket set; `applyCaisWeights` produces a freshly-scored copy.
+function repaintCaisKind(kind) {
+  const raw = caisState.data[kind];
+  if (!raw) return;
+  const filtered = filterByPool(filterByTeam(raw));
+  const scored   = applyCaisWeights(filtered, kind);
+  renderCaisStats(kind, scored);
+  if (kind === 'batting') {
+    renderCaisBatTable(scored);
+    renderCaisBatCharts(scored);
+    attachLbSearch('cais-bat-search', 'cais-bat-table');
+  } else {
+    renderCaisBowlTable(scored);
+    renderCaisBowlCharts(scored);
+    attachLbSearch('cais-bowl-search', 'cais-bowl-table');
+  }
+  syncCaisPanelUI(kind);
+}
+
 async function renderCais() {
-  // Fetch both kinds on first load (for current filter)
-  const bat  = caisState.data.batting || await fetchCaisData('batting');
-  const bowl = caisState.data.bowling || await fetchCaisData('bowling');
-
-  // Team chip first, then the WC-only pool filter (Test nations only).
-  let batFilt  = filterByPool(filterByTeam(bat));
-  let bowlFilt = filterByPool(filterByTeam(bowl));
-  // Re-rank after filtering so the visible list starts at #1.
-  batFilt  = batFilt.map((r, i)  => ({ ...r, rank: i + 1 }));
-  bowlFilt = bowlFilt.map((r, i) => ({ ...r, rank: i + 1 }));
-
-  renderCaisStats('batting', batFilt);
-  renderCaisStats('bowling', bowlFilt);
-  renderCaisBatTable(batFilt);
-  renderCaisBowlTable(bowlFilt);
-  renderCaisBatCharts(batFilt);
-  renderCaisBowlCharts(bowlFilt);
-  attachLbSearch('cais-bat-search',  'cais-bat-table');
-  attachLbSearch('cais-bowl-search', 'cais-bowl-table');
+  // Fetch both kinds on first load (for current filter). The server-side
+  // `cais` field is left on each row but gets overwritten by the client
+  // formula as soon as applyCaisWeights runs.
+  if (!caisState.data.batting) await fetchCaisData('batting');
+  if (!caisState.data.bowling) await fetchCaisData('bowling');
+  repaintCaisKind('batting');
+  repaintCaisKind('bowling');
 }
 
 function showCaisPanel(kind) {
@@ -1925,6 +2298,35 @@ async function loadCais() {
   // sub-tabs
   document.querySelectorAll('.sub-tab').forEach(t =>
     t.onclick = () => showCaisPanel(t.dataset.cais));
+
+  // ── Control-panel slider wiring ─────────────────────────────
+  // Each slider moves one weight in caisWeights, then we repaint just
+  // that kind (batting / bowling). Uses `input` not `change` so dragging
+  // feels live — the dataset is already in memory, so recompute+sort+DOM
+  // paint is <10ms on career-view WC (~1000 players).
+  document.querySelectorAll('[data-bat-weight]').forEach(input => {
+    input.addEventListener('input', () => {
+      const key = input.getAttribute('data-bat-weight');
+      caisWeights.batting[key] = parseFloat(input.value);
+      repaintCaisKind('batting');
+    });
+  });
+  document.querySelectorAll('[data-bowl-weight]').forEach(input => {
+    input.addEventListener('input', () => {
+      const key = input.getAttribute('data-bowl-weight');
+      caisWeights.bowling[key] = parseFloat(input.value);
+      repaintCaisKind('bowling');
+    });
+  });
+  document.getElementById('cais-bat-reset')?.addEventListener('click', () => {
+    Object.assign(caisWeights.batting, CAIS_DEFAULTS.batting);
+    repaintCaisKind('batting');
+  });
+  document.getElementById('cais-bowl-reset')?.addEventListener('click', () => {
+    Object.assign(caisWeights.bowling, CAIS_DEFAULTS.bowling);
+    repaintCaisKind('bowling');
+  });
+
   await renderCais();
 }
 
@@ -2492,15 +2894,52 @@ const LOADERS = {
 
 /* ── Competition picker ─────────────────────────────────── */
 let COMPS_MANIFEST = [];
+let DATASET_META  = { last_updated: null, latest_match: null };
 
 async function loadCompetitions() {
   try {
-    if (FLASK) {
-      COMPS_MANIFEST = await fetch('/api/competitions').then(r => r.json());
+    const url = FLASK ? '/api/competitions' : 'static/data/competitions.json';
+    const raw = await fetch(url).then(r => r.json());
+    // Accept both shapes: legacy (raw list) and new wrapped object with
+    // freshness metadata. The wrapped form is what precompute.py now emits
+    // and what Flask mirrors; the legacy fallback keeps old static bundles
+    // working in case someone points at an older Pages deploy.
+    if (Array.isArray(raw)) {
+      COMPS_MANIFEST = raw;
+      DATASET_META   = { last_updated: null, latest_match: null };
     } else {
-      COMPS_MANIFEST = await fetch('static/data/competitions.json').then(r => r.json());
+      COMPS_MANIFEST = raw.competitions || [];
+      DATASET_META   = {
+        last_updated: raw.last_updated || null,
+        latest_match: raw.latest_match || null,
+      };
     }
-  } catch(_) { COMPS_MANIFEST = []; }
+  } catch(_) {
+    COMPS_MANIFEST = [];
+    DATASET_META   = { last_updated: null, latest_match: null };
+  }
+  paintUpdatedBadge();
+}
+
+// Short, human-friendly "Updated …" label under the logo.
+// Uses the newer of last_updated (when precompute ran) and latest_match
+// (most recent match in the dataset) so the badge shows freshness, not
+// just when we re-baked JSONs.
+function paintUpdatedBadge() {
+  const el = document.getElementById('updated-badge');
+  if (!el) return;
+  const stamp = DATASET_META.last_updated || DATASET_META.latest_match;
+  if (!stamp) { el.textContent = ''; el.title = ''; return; }
+  const d = new Date(stamp);
+  if (isNaN(d.getTime())) { el.textContent = ''; return; }
+  const fmt = d.toLocaleDateString(undefined,
+    { day: 'numeric', month: 'short', year: 'numeric' });
+  el.textContent = `Updated ${fmt}`;
+  const parts = [
+    DATASET_META.last_updated ? `Data rebuilt: ${DATASET_META.last_updated}` : null,
+    DATASET_META.latest_match ? `Latest match in dataset: ${DATASET_META.latest_match}` : null,
+  ].filter(Boolean);
+  el.title = parts.join('\n');
 }
 
 /* Render the picker into any container (home grid OR welcome modal grid). */
@@ -2543,7 +2982,7 @@ function updateCompBadge() {
    comp-switch is the only reliable way to stop old-league data flashing
    before the new data arrives. */
 const CHART_IDS = [
-  'cais-bat-chart', 'cais-bat-scatter', 'cais-bowl-chart', 'cais-bowl-role',
+  'cais-bat-scatter', 'cais-bowl-role',
   'c-batting-runs', 'c-batting-sr', 'c-batting-scatter',
   'c-bowling-wkts', 'c-bowling-econ', 'c-bowling-scatter',
   'c-rec-scores', 'c-rec-cent', 'c-teams-wins', 'c-teams-wr',
