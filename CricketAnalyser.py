@@ -43,7 +43,8 @@ class CricketAnalyser:
             self.df['competition'] = 'unknown'
 
         # Safety net: whatever the source CSV / parquet contained, strip
-        # associate-nation games out of the T20I and WC slices.
+        # associate-nation games out of the T20I slice (but NOT WC — the
+        # main World Cup legitimately features qualified associates).
         self.df = self._apply_test_nations_filter(self.df)
 
         if not use_parquet:
@@ -65,18 +66,20 @@ class CricketAnalyser:
 
     @classmethod
     def _apply_test_nations_filter(cls, df: pd.DataFrame) -> pd.DataFrame:
-        """Drop t20is + wc balls where either team isn't a Test-playing nation.
-        Other competitions (franchise leagues) pass through untouched."""
+        """Drop T20I-bilateral balls where either team isn't a Test-playing
+        nation — keeps the T20I leaderboard from being gamed by lopsided
+        associate fixtures. World Cups are NOT filtered: the main draw
+        legitimately pits Full-Members against qualified associates."""
         if df is None or len(df) == 0 or 'competition' not in df.columns:
             return df
-        target = df['competition'].isin({'t20is', 'wc'})
+        target = df['competition'].eq('t20is')
         if not target.any():
             return df
         in_scope = (
             df['batting_team'].isin(cls.TEST_NATIONS)
             & df['bowling_team'].isin(cls.TEST_NATIONS)
         )
-        # Keep every non-target row, plus target rows between Test nations.
+        # Keep every non-T20I row, plus T20I rows between Test nations.
         keep = (~target) | in_scope
         return df[keep].reset_index(drop=True)
 

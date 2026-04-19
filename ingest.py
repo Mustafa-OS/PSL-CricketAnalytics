@@ -45,9 +45,11 @@ DATA_DIR = Path('data')
 RAW_DIR  = DATA_DIR / 'raw'
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 
-# T20I / World Cup data is dominated by associate-nation fixtures that pollute
-# the leaderboards (e.g. Pakistan batter averaging 90 against Germany). Restrict
-# T20Is and the World Cup view to games between ICC Full-Member nations.
+# T20I bilaterals are dominated by associate-nation fixtures that pollute the
+# leaderboards (e.g. Pakistan batter averaging 90 against Germany). The T20I
+# leaderboard is restricted to ICC Full-Member nations. T20 World Cups are
+# NOT filtered — the main tournament legitimately pits Full-Members against
+# qualified associates (Namibia, Netherlands, USA etc.) and those runs count.
 TEST_NATIONS = {
     'Afghanistan', 'Australia', 'Bangladesh', 'England', 'India', 'Ireland',
     'New Zealand', 'Pakistan', 'South Africa', 'Sri Lanka', 'West Indies',
@@ -226,25 +228,22 @@ def convert_zip(zip_path: Path, comp_code: str) -> pd.DataFrame:
 
 # ── Orchestration ──────────────────────────────────────────────────────
 def build_one(code: str, zip_name: str) -> pd.DataFrame | None:
+    """Download + parse one Cricsheet zip into project-schema DF.
+
+    Returns the *unfiltered* frame. The caller (see `main`) applies the
+    Test-nations filter for the T20I leaderboard while keeping the raw
+    data available for build_wc to use (the WC includes associate teams).
+    """
     zp = download(code, zip_name)
     if zp is None:
         return None
     df = convert_zip(zp, code)
     if df.empty:
         return None
-    # Restrict T20Is to Test-playing nations (see TEST_NATIONS).
-    if code == 't20is':
-        before = len(df)
-        df = filter_test_nations(df)
-        print(f'  ⛉  T20Is Test-nations filter: {before:,} → {len(df):,} rows')
-    # Cache per-comp CSV
-    out = DATA_DIR / f'{code}.csv'
-    df.to_csv(out, index=False)
-    print(f'  ✓ {code}: {len(df):,} rows  →  {out}')
     return df
 
 
-def build_wc(t20is: pd.DataFrame) -> pd.DataFrame:
+def build_wc(t20is_unfiltered: pd.DataFrame) -> pd.DataFrame:
     """T20 World Cups = T20Is with a core WC event name.
 
     Catches every naming variant Cricsheet has used:
@@ -252,8 +251,13 @@ def build_wc(t20is: pd.DataFrame) -> pd.DataFrame:
       • "ICC World Twenty20"         (2007–2012, some 2015)
       • "World T20"                  (2014, 2016)
     Explicitly EXCLUDES qualifier / regional / tri-series feeder events so
-    only the main tournament remains. T20Is are already Test-nations-filtered
-    by `build_one`, and the filter re-applies here as a safety net.
+    only the main tournament remains.
+
+    Unlike the T20I leaderboard, the WC view is NOT Test-nations-filtered:
+    the main draw legitimately features qualified associates (Namibia,
+    Netherlands, USA, Scotland, Ireland pre-Full-Member, etc.) and runs /
+    wickets against them count. So this function expects the *unfiltered*
+    T20I frame — caller must not pre-filter.
 
     Cricsheet uses split-year season codes like "2013/14" for tournaments
     that cross the calendar boundary, which truncate to the starting year
@@ -261,14 +265,13 @@ def build_wc(t20is: pd.DataFrame) -> pd.DataFrame:
     The user-facing label should be the tournament year, so we override
     `season` with the calendar year of the match date per match_id.
     """
-    if t20is is None or t20is.empty:
+    if t20is_unfiltered is None or t20is_unfiltered.empty:
         return pd.DataFrame()
-    evs = t20is['event'].fillna('').astype(str)
+    evs = t20is_unfiltered['event'].fillna('').astype(str)
     kw_main = evs.str.contains(r'(?i)world cup|world twenty20|world t20')
     kw_bad  = evs.str.contains(r'(?i)qualif|region|tri-series|sub\s|quadrangular')
-    wc = t20is[kw_main & ~kw_bad].copy()
+    wc = t20is_unfiltered[kw_main & ~kw_bad].copy()
     wc['competition'] = 'wc'
-    wc = filter_test_nations(wc)
 
     # Re-derive season from match date — one stable year per match_id.
     if not wc.empty:
@@ -282,7 +285,7 @@ def build_wc(t20is: pd.DataFrame) -> pd.DataFrame:
     wc.to_csv(out, index=False)
     if not wc.empty:
         yrs = sorted(wc['season'].dropna().unique().tolist())
-        print(f'  ✓ wc (from T20Is): {len(wc):,} rows  →  {out}')
+        print(f'  ✓ wc (from T20Is, all teams): {len(wc):,} rows  →  {out}')
         print(f'    tournament years: {yrs}')
     return wc
 
@@ -294,18 +297,29 @@ def main(argv: Iterable[str]):
     print(f'Building: {", ".join(wanted)}')
 
     pieces = []
-    t20is_df = None
+    t20is_raw = None   # unfiltered — needed by build_wc
     for code in wanted:
         name, zip_name, _ = COMPS[code]
         df = build_one(code, zip_name)
-        if df is not None:
-            pieces.append(df)
-            if code == 't20is':
-                t20is_df = df
+        if df is None:
+            continue
+        if code == 't20is':
+            # Keep the raw frame aside for the WC builder (the main WC
+            # draw includes associate nations and we want those balls).
+            t20is_raw = df
+            # The T20I leaderboard itself is restricted to ICC Full-Member
+            # nations so lopsided bilaterals don't dominate the averages.
+            before = len(df)
+            df = filter_test_nations(df)
+            print(f'  ⛉  T20Is Test-nations filter: {before:,} → {len(df):,} rows')
+        out = DATA_DIR / f'{code}.csv'
+        df.to_csv(out, index=False)
+        print(f'  ✓ {code}: {len(df):,} rows  →  {out}')
+        pieces.append(df)
 
-    # Derive World Cup set from T20Is
-    if t20is_df is not None:
-        wc = build_wc(t20is_df)
+    # Derive World Cup set from UNFILTERED T20Is (all teams counted).
+    if t20is_raw is not None:
+        wc = build_wc(t20is_raw)
         if not wc.empty:
             pieces.append(wc)
 
