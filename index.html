@@ -515,10 +515,15 @@
       font-weight: 400;
     }
 
-    /* Stat badge */
+    /* Stat badge.
+       auto-fill (not auto-fit) keeps empty tracks reserved — otherwise a
+       lone tile on a wrapped row stretches to the full width, which looks
+       lopsided next to the 6-tile row above it (eg CAIS tile on the
+       player modal). With auto-fill the wrapped tile keeps one column's
+       width, matching the tiles above. */
     .stat-cards {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 12px;
       margin-bottom: 22px;
     }
@@ -1317,7 +1322,9 @@
       <div id="modal-bowling" class="hidden">
         <div class="section-sep">Bowling</div>
         <div id="modal-bowl-stats" class="stat-cards"></div>
-        <div class="card full"><div class="card-title">Wickets by Season</div><div id="modal-bowl-seasons"></div></div>
+        <div class="grid">
+          <div class="card full"><div class="card-title">Wickets by Season</div><div id="modal-bowl-seasons"></div></div>
+        </div>
       </div>
 
       <div id="modal-none" class="empty hidden">
@@ -2383,13 +2390,18 @@ async function openPlayer(name) {
     const tR = performance.now();
     if (p.batting) {
       const seas = p.batting_seasons || [];
+      // Season axis must be categorical — with numeric type Plotly
+      // draws half-year tick marks (eg "2,018.5", "2,019.5") when only
+      // two seasons are present. type:'category' coerces each season to
+      // a discrete label so ticks land on whole years only.
       Plotly.react('modal-bat-seasons', [{
         type: 'bar',
-        x: seas.map(s => s.season),
+        x: seas.map(s => String(s.season)),
         y: seas.map(s => s.runs),
         marker: { color: PAL.amber },
         hovertemplate: '<b>%{x}</b><br>Runs: %{y}<extra></extra>',
-      }], { ...BASE, xaxis: { ...AXIS }, yaxis: { ...AXIS, title: 'Runs' },
+      }], { ...BASE, xaxis: { ...AXIS, type: 'category' },
+            yaxis: { ...AXIS, title: 'Runs' },
             height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
 
       // Innings bar chart. On a 200+ innings career, Plotly spends most
@@ -2397,14 +2409,17 @@ async function openPlayer(name) {
       // bar gets its own <rect fill>). Splitting into two traces — one
       // for dismissed innings (rose), one for not-out (emerald) — lets
       // Plotly paint each trace as a single coloured set, which is ~5×
-      // faster and scales much better. The category x-axis stitches
-      // them back together in innings order visually.
+      // faster and scales much better. barmode:'overlay' keeps bars at
+      // their own x positions (they never share an x, so nothing stacks
+      // or overlaps). We pin the x-range to the full innings span so
+      // short-career players don't get oddly zoomed axes.
       const inn = p.innings_list || [];
       const outX = [], outY = [], notX = [], notY = [];
       for (const i of inn) {
         if (i.dismissed) { outX.push(i.inning_num); outY.push(i.runs); }
         else             { notX.push(i.inning_num); notY.push(i.runs); }
       }
+      const maxInn = inn.length ? inn[inn.length - 1].inning_num : 1;
       Plotly.react('modal-bat-innings', [
         {
           type: 'bar', name: 'Out',
@@ -2419,7 +2434,8 @@ async function openPlayer(name) {
           hovertemplate: '<b>Inn %{x}</b><br>Runs: %{y} (not out)<extra></extra>',
         },
       ], { ...BASE, barmode: 'overlay',
-            xaxis: { ...AXIS, title: 'Innings #' },
+            xaxis: { ...AXIS, title: 'Innings #',
+                     range: [0.5, maxInn + 0.5], dtick: Math.max(1, Math.ceil(maxInn / 10)) },
             yaxis: { ...AXIS, title: 'Runs' },
             showlegend: false,
             height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
@@ -2428,11 +2444,12 @@ async function openPlayer(name) {
       const seas = p.bowling_seasons || [];
       Plotly.react('modal-bowl-seasons', [{
         type: 'bar',
-        x: seas.map(s => s.season),
+        x: seas.map(s => String(s.season)),
         y: seas.map(s => s.wickets),
         marker: { color: PAL.rose },
         hovertemplate: '<b>%{x}</b><br>Wkts: %{y}<extra></extra>',
-      }], { ...BASE, xaxis: { ...AXIS }, yaxis: { ...AXIS, title: 'Wickets' },
+      }], { ...BASE, xaxis: { ...AXIS, type: 'category' },
+            yaxis: { ...AXIS, title: 'Wickets' },
             height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
     }
     console.log(`[player] plotly in ${(performance.now()-tR).toFixed(0)}ms total ${(performance.now()-t0).toFixed(0)}ms`);
