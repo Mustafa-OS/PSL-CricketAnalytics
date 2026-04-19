@@ -304,6 +304,18 @@ def main(argv: Iterable[str]):
         if df is None:
             continue
         if code == 't20is':
+            # Cricsheet labels cross-calendar seasons like "2025/26" which
+            # _season_to_int truncates to 2025, so a T20I played in Feb 2026
+            # lands under season=2025. Unlike BBL (where "2024/25" is the
+            # conventional one-season label), international bilaterals are
+            # standalone games — users expect calendar-year filtering.
+            # Re-derive season from the match date per match_id.
+            if 'date' in df.columns and len(df):
+                dt = pd.to_datetime(df['date'], errors='coerce')
+                df['season'] = (
+                    dt.dt.year.groupby(df['match_id']).transform('min')
+                      .astype('Int64')
+                )
             # Keep the raw frame aside for the WC builder (the main WC
             # draw includes associate nations and we want those balls).
             t20is_raw = df
