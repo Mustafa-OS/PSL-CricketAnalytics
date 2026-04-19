@@ -148,8 +148,13 @@ def dismissals():
 @app.route('/api/centuries')
 def centuries():
     df = analyzer.century_makers(competition=_comp())
-    counts = (df.groupby('batter').size()
-                .reset_index(name='centuries')
+    # Preserve most-frequent batting team per player so the client can
+    # filter (e.g. to Test-playing nations for the WC view).
+    counts = (df.groupby('batter')
+                .agg(centuries=('runs', 'size'),
+                     team=('batting_team',
+                           lambda s: s.mode().iat[0] if len(s.mode()) else None))
+                .reset_index()
                 .sort_values('centuries', ascending=False)
                 .head(15))
     return jsonify(serialize(counts))

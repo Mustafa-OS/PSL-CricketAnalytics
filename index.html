@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EveryBall — T20 Cricket Analytics</title>
+  <title>The T20 Analyst — T20 Cricket Analytics</title>
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     /* ══════════════════════════════════════════════════════════════════
-       EVERYBALL — dark slate · amber accent · bright multi-colour charts
+       THE T20 ANALYST — dark slate · amber accent · bright multi-colour charts
        ══════════════════════════════════════════════════════════════════ */
     :root {
       --bg:          #0a0e14;
@@ -76,8 +76,9 @@
     }
     .brand-wordmark {
       font-family: 'Space Grotesk', sans-serif;
-      font-weight: 700; font-size: 18px;
-      letter-spacing: -0.01em;
+      font-weight: 700; font-size: 17px;
+      letter-spacing: -0.015em;
+      white-space: nowrap;
     }
     .brand-wordmark span { color: var(--accent); }
 
@@ -98,6 +99,35 @@
       background: rgba(251, 191, 36, 0.2);
       border-color: var(--accent);
     }
+
+    /* WC-only "Test nations only" toggle — appears next to the comp badge. */
+    .wc-toggle {
+      display: none;
+      margin-left: 6px;
+      padding: 4px 10px;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all .15s;
+      align-items: center;
+      gap: 6px;
+    }
+    .wc-toggle.visible { display: inline-flex; }
+    .wc-toggle:hover { border-color: var(--accent); color: #fff; }
+    .wc-toggle.on {
+      color: #0b0f18;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .wc-toggle .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor; opacity: 0.5;
+    }
+    .wc-toggle.on .dot { opacity: 1; }
 
     /* comp picker grid on home */
     .comp-grid {
@@ -780,7 +810,7 @@
 <div id="welcome" class="welcome hidden">
   <button id="welcome-close" class="welcome-close hidden" title="Close">✕</button>
   <div class="welcome-inner">
-    <div class="welcome-logo">⚡ Every<span>Ball</span></div>
+    <div class="welcome-logo">⚡ The T20 <span>Analyst</span></div>
     <h1 class="welcome-title">Pick a <span class="accent">competition</span></h1>
     <p class="welcome-sub">
       Every major T20 league, every men's T20 international, every T20 World Cup —
@@ -797,8 +827,12 @@
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand" data-view="home">
-      <div class="brand-wordmark">⚡ Every<span>Ball</span></div>
+      <div class="brand-wordmark">⚡ The T20 <span>Analyst</span></div>
       <button id="comp-badge" class="comp-badge" title="Change competition">—</button>
+      <button id="wc-testonly" class="wc-toggle"
+              title="Show only players from ICC Full-Member nations">
+        <span class="dot"></span>Test nations only
+      </button>
     </div>
 
     <nav class="topnav">
@@ -1276,7 +1310,7 @@
 
 <script>
 /* ╔═══════════════════════════════════════════════════════════════════╗
-   ║  EVERYBALL — App logic                                           ║
+   ║  THE T20 ANALYST — App logic                                     ║
    ╚═══════════════════════════════════════════════════════════════════╝ */
 
 /* ── Palette ─────────────────────────────────────────────── */
@@ -1321,11 +1355,31 @@ const CFG = { responsive: true, displayModeBar: false };
 /* ── API helper — works Flask + static ──────────────────── */
 const FLASK = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 
-/* Current competition (global) — persisted in localStorage. */
+/* ICC Full-Member nations (the 12 "Test-playing" countries). Used by the
+   WC-only toggle to filter leaderboards to main-draw Test sides. */
+const TEST_NATIONS = new Set([
+  'Afghanistan', 'Australia', 'Bangladesh', 'England', 'India', 'Ireland',
+  'New Zealand', 'Pakistan', 'South Africa', 'Sri Lanka', 'West Indies',
+  'Zimbabwe',
+]);
+
+/* Current competition + WC-only test-nations toggle. Both persisted. */
 const APP = {
   get comp() { return localStorage.getItem('comp') || 'psl'; },
   set comp(v) { localStorage.setItem('comp', v); },
+  get wcTestOnly() { return localStorage.getItem('wc_test_only') === '1'; },
+  set wcTestOnly(v) { localStorage.setItem('wc_test_only', v ? '1' : '0'); },
 };
+
+/* Drop rows whose team isn't an ICC Full-Member. Only meaningful in WC. */
+function filterTestOnly(rows, teamKey = 'team') {
+  if (!Array.isArray(rows)) return rows;
+  if (!(APP.comp === 'wc' && APP.wcTestOnly)) return rows;
+  return rows.filter(r => {
+    const t = r && r[teamKey];
+    return t && TEST_NATIONS.has(t);
+  });
+}
 
 async function apiGet(ep, query = {}) {
   const q = { ...query, competition: APP.comp };
@@ -1375,8 +1429,13 @@ const MERGE = {
       const matches = rows.reduce((s,r) => s + (r.matches    || 0), 0);
       const dism    = rows.reduce((s,r) => s + (r.dismissals || 0), 0);
       const balls   = rows.reduce((s,r) => s + (r.balls_faced|| 0), 0);
+      // Carry the most-used team through the merge so WC test-nation
+      // filtering still works after aggregating multiple seasons.
+      const teamTally = {};
+      rows.forEach(r => { if (r.team) teamTally[r.team] = (teamTally[r.team] || 0) + (r.balls_faced || r.matches || 1); });
+      const team = Object.entries(teamTally).sort((a,b) => b[1]-a[1])[0]?.[0] ?? null;
       return {
-        batter:      rows[0].batter,
+        batter:      rows[0].batter, team,
         total_runs:  runs, matches, dismissals: dism, balls_faced: balls,
         average: dism  ? +(runs / dism).toFixed(2)         : null,
         SR:      balls ? +(runs / balls * 100).toFixed(2)  : null,
@@ -1389,8 +1448,11 @@ const MERGE = {
       const runs    = rows.reduce((s,r) => s + (r.runs    || 0), 0);
       const balls   = rows.reduce((s,r) => s + (r.balls   || 0), 0);
       const matches = rows.reduce((s,r) => s + (r.matches || 0), 0);
+      const teamTally = {};
+      rows.forEach(r => { if (r.team) teamTally[r.team] = (teamTally[r.team] || 0) + (r.balls || 1); });
+      const team = Object.entries(teamTally).sort((a,b) => b[1]-a[1])[0]?.[0] ?? null;
       return {
-        batter: rows[0].batter,
+        batter: rows[0].batter, team,
         runs, balls, matches,
         SR: balls ? +(runs / balls * 100).toFixed(2) : null,
       };
@@ -1403,8 +1465,11 @@ const MERGE = {
       const wkts    = rows.reduce((s,r) => s + (r.wickets       || 0), 0);
       const matches = rows.reduce((s,r) => s + (r.matches       || 0), 0);
       const balls   = rows.reduce((s,r) => s + (r.balls         || 0), 0);
+      const teamTally = {};
+      rows.forEach(r => { if (r.team) teamTally[r.team] = (teamTally[r.team] || 0) + (r.balls || 1); });
+      const team = Object.entries(teamTally).sort((a,b) => b[1]-a[1])[0]?.[0] ?? null;
       return {
-        bowler: rows[0].bowler,
+        bowler: rows[0].bowler, team,
         runs_conceded: runs, wickets: wkts, matches, balls,
         economy: balls ? +(runs / (balls/6)).toFixed(2) : null,
         avg:     wkts  ? +(runs / wkts).toFixed(2)      : null,
@@ -1777,8 +1842,12 @@ async function renderCais() {
   const bat  = caisState.data.batting || await fetchCaisData('batting');
   const bowl = caisState.data.bowling || await fetchCaisData('bowling');
 
-  const batFilt  = filterByTeam(bat);
-  const bowlFilt = filterByTeam(bowl);
+  // Team chip first, then WC "Test nations only" toggle.
+  let batFilt  = filterTestOnly(filterByTeam(bat));
+  let bowlFilt = filterTestOnly(filterByTeam(bowl));
+  // Re-rank after filtering so the visible list starts at #1.
+  batFilt  = batFilt.map((r, i)  => ({ ...r, rank: i + 1 }));
+  bowlFilt = bowlFilt.map((r, i) => ({ ...r, rank: i + 1 }));
 
   renderCaisStats('batting', batFilt);
   renderCaisStats('bowling', bowlFilt);
@@ -1833,6 +1902,9 @@ async function renderBatting() {
     apiGetSeasons('batting',      battingState.seasons, MERGE.batting),
     apiGetSeasons('strike-rates', battingState.seasons, MERGE['strike-rates']),
   ]);
+  // WC-only Test-nations filter.
+  data = filterTestOnly(data);
+  sr   = filterTestOnly(sr);
   // Re-sort merged output by runs / SR respectively.
   if (battingState.seasons.length > 1) {
     data = [...data].sort((a, b) => (b.total_runs ?? 0) - (a.total_runs ?? 0));
@@ -1905,6 +1977,7 @@ async function loadBatting() {
 const bowlingState = { seasons: [] };
 async function renderBowling() {
   let data = await apiGetSeasons('bowling', bowlingState.seasons, MERGE.bowling);
+  data = filterTestOnly(data);
   if (bowlingState.seasons.length > 1) {
     data = [...data].sort((a, b) => (b.wickets ?? 0) - (a.wickets ?? 0));
   }
@@ -1980,12 +2053,17 @@ async function loadBowling() {
    RECORDS VIEW (records + teams + dismissals)
    ══════════════════════════════════════════════════════════ */
 async function loadRecords() {
-  const [scores, cent, teams, dis] = await Promise.all([
+  let [scores, cent, teams, dis] = await Promise.all([
     apiGet('highest-scores'),
     apiGet('centuries'),
     apiGet('teams'),
     apiGet('dismissals'),
   ]);
+
+  // WC-only Test-nations filter.
+  scores = filterTestOnly(scores, 'batting_team');
+  cent   = filterTestOnly(cent);
+  teams  = filterTestOnly(teams);
 
   // Each innings is its own bar — label must be unique (batter + date)
   // to prevent Plotly from stacking duplicate y-labels.
@@ -2226,6 +2304,29 @@ function updateCompBadge() {
   document.getElementById('comp-badge').textContent = label;
   const cta = document.getElementById('cta-comp-name');
   if (cta) cta.textContent = c ? c.name : APP.comp.toUpperCase();
+  // WC-only "Test nations only" toggle: show it only for the WC view,
+  // reflect the current persisted state.
+  const tog = document.getElementById('wc-testonly');
+  if (tog) {
+    tog.classList.toggle('visible', APP.comp === 'wc');
+    tog.classList.toggle('on',      APP.wcTestOnly);
+  }
+}
+
+/* Flip the WC Test-nations filter and re-render the currently visible view. */
+async function toggleWcTestOnly() {
+  APP.wcTestOnly = !APP.wcTestOnly;
+  updateCompBadge();
+  // Invalidate CAIS cache so the re-rank happens cleanly.
+  caisState.data = { batting: null, bowling: null };
+  // Re-run whichever loader is active.
+  const active = document.querySelector('.view.active');
+  const current = active ? active.id.replace('view-', '') : 'home';
+  if (LOADERS[current]) {
+    loaded[current] = false;
+    await LOADERS[current]();
+    loaded[current] = true;
+  }
 }
 
 /* Every Plotly chart we render lives in a known div. Wiping them on
@@ -2320,6 +2421,12 @@ document.addEventListener('keydown', e => {
 document.getElementById('comp-badge').onclick = (e) => {
   e.stopPropagation();
   showWelcome();
+};
+
+// WC-only "Test nations only" toggle.
+document.getElementById('wc-testonly').onclick = (e) => {
+  e.stopPropagation();
+  toggleWcTestOnly();
 };
 
 (async () => {

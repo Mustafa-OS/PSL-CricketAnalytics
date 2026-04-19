@@ -114,6 +114,13 @@ class CricketAnalyser:
         stats = stats.merge(balls_faced, on='batter', how='left')
         stats['SR'] = (stats['total_runs'] / stats['balls_faced'] * 100).round(2)
 
+        # Primary team per batter (most frequent) — lets the client filter
+        # e.g. to Test-playing nations in the WC view.
+        team = (legal.groupby('batter')['batting_team']
+                      .agg(lambda s: s.mode().iat[0] if len(s.mode()) else None)
+                      .rename('team'))
+        stats = stats.merge(team, on='batter', how='left')
+
         stats = stats[(stats['matches'] >= min_innings) & (stats['total_runs'] >= min_runs)]
         return stats.sort_values('total_runs', ascending=False)
     
@@ -142,6 +149,13 @@ class CricketAnalyser:
         stats['economy'] = (stats['runs_conceded'] / (stats['balls'] / 6)).round(2)
         stats['avg'] = (stats['runs_conceded'] / (stats['wickets'] + 0.001)).round(2)
 
+        # Primary team per bowler (most frequent) — lets the client filter
+        # e.g. to Test-playing nations in the WC view.
+        team = (legal_balls.groupby('bowler')['bowling_team']
+                            .agg(lambda s: s.mode().iat[0] if len(s.mode()) else None)
+                            .rename('team'))
+        stats = stats.merge(team, on='bowler', how='left')
+
         stats = stats[(stats['balls'] >= min_balls) & (stats['wickets'] >= min_wickets)]
         return stats.sort_values('wickets', ascending=False)
     
@@ -156,6 +170,14 @@ class CricketAnalyser:
         batter_data.columns = ['batter', 'runs', 'balls', 'matches']
 
         batter_data['SR'] = (batter_data['runs'] / batter_data['balls'] * 100).round(2)
+
+        # Primary team per batter (most frequent) — lets the client filter
+        # e.g. to Test-playing nations in the WC view.
+        team = (legal.groupby('batter')['batting_team']
+                      .agg(lambda s: s.mode().iat[0] if len(s.mode()) else None)
+                      .rename('team'))
+        batter_data = batter_data.merge(team, on='batter', how='left')
+
         batter_data = batter_data[(batter_data['balls'] >= min_balls) & (batter_data['runs'] >= min_runs)]
 
         return batter_data.sort_values('SR', ascending=False)
@@ -854,7 +876,7 @@ if __name__ == "__main__":
     analyzer = CricketAnalyser(csv_path)
 
     print("="*60)
-    print("EVERYBALL — T20 CRICKET ANALYTICS")
+    print("THE T20 ANALYST — T20 CRICKET ANALYTICS")
     print(f"loaded {len(analyzer.df):,} rows from {csv_path}")
     print("="*60)
     

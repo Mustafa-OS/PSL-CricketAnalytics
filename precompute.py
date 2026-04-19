@@ -98,10 +98,13 @@ def build_comp(a: CricketAnalyser, code: str):
     save(f'{dir_}/cais-bowling.json',
          serialize(a.cais_bowling(min_balls=72, min_wickets=8, competition=code)))
 
-    # Centuries count per batter
+    # Centuries count per batter — preserve team for client-side filtering.
     cent = a.century_makers(competition=code)
-    counts = (cent.groupby('batter').size()
-                   .reset_index(name='centuries')
+    counts = (cent.groupby('batter')
+                   .agg(centuries=('runs', 'size'),
+                        team=('batting_team',
+                              lambda s: s.mode().iat[0] if len(s.mode()) else None))
+                   .reset_index()
                    .sort_values('centuries', ascending=False).head(15))
     save(f'{dir_}/centuries.json', serialize(counts))
 
