@@ -2121,6 +2121,14 @@ searchDropdown.addEventListener('click', e => {
   openPlayer(r.dataset.player);
 });
 
+// Warm the fetch the moment the user hovers a result — by the time they
+// actually click (~150–300ms later) the JSON is usually already in cache,
+// so the modal opens instantly.
+searchDropdown.addEventListener('mouseover', e => {
+  const r = e.target.closest('.search-result');
+  if (r) prefetchPlayer(r.dataset.player);
+});
+
 document.addEventListener('click', e => {
   if (!e.target.closest('.search-wrap')) searchDropdown.classList.add('hidden');
 });
@@ -2137,6 +2145,47 @@ async function getPlayerIndex() {
   return PLAYER_INDEX_CACHE[comp];
 }
 
+/* Per-profile fetch cache, keyed by "<comp>:<name>" → Promise<profile>.
+   Caching the promise (not the resolved value) lets multiple concurrent
+   callers share one in-flight fetch — matters for the hover-prefetch
+   case where click arrives before the prefetch finishes. Cleared when
+   the competition changes. */
+const PROFILE_CACHE = {};
+function profileCacheKey(name) { return `${APP.comp}:${name}`; }
+
+async function fetchPlayerProfile(name) {
+  const key = profileCacheKey(name);
+  if (PROFILE_CACHE[key]) return PROFILE_CACHE[key];
+
+  const run = async () => {
+    if (FLASK) {
+      const r = await fetch(`/api/player/${encodeURIComponent(name)}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+    const idx = await getPlayerIndex();
+    const slug = idx[name];
+    if (!slug) return { __missing: true, name };
+    const url = `static/data/${APP.comp}/player/${slug}.json`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status} on ${url}`);
+    return r.json();
+  };
+  const promise = run();
+  // Cache the promise immediately so concurrent callers dedupe; on
+  // failure drop it so the next click retries instead of sticking to
+  // the error.
+  PROFILE_CACHE[key] = promise;
+  promise.catch(() => { delete PROFILE_CACHE[key]; });
+  return promise;
+}
+
+/* Fire-and-forget prefetch. Triggered on hover of a search result. */
+function prefetchPlayer(name) {
+  if (!name || FLASK) return;
+  fetchPlayerProfile(name).catch(() => {});
+}
+
 async function openPlayer(name) {
   const modal = document.getElementById('player-modal');
   document.getElementById('modal-name').textContent = name;
@@ -2146,29 +2195,9 @@ async function openPlayer(name) {
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
 
-  // Flask path hits the live API; static/Pages path hits the prebuilt
-  // per-player JSON (keyed by slug via the comp's player-index.json).
   let p;
   try {
-    if (FLASK) {
-      const r = await fetch(`/api/player/${encodeURIComponent(name)}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      p = await r.json();
-    } else {
-      const idx = await getPlayerIndex();
-      const slug = idx[name];
-      if (!slug) {
-        document.getElementById('modal-none').classList.remove('hidden');
-        document.getElementById('modal-none').innerHTML =
-          `<p>No profile data for <b>${name}</b> in this competition.<br>` +
-          `They may not meet the minimum-activity thresholds (5 innings batted or 30 balls bowled).</p>`;
-        return;
-      }
-      const url = `static/data/${APP.comp}/player/${slug}.json`;
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(`HTTP ${r.status} on ${url}`);
-      p = await r.json();
-    }
+    p = await fetchPlayerProfile(name);
   } catch (err) {
     console.error('openPlayer error', err);
     document.getElementById('modal-none').classList.remove('hidden');
@@ -2177,7 +2206,17 @@ async function openPlayer(name) {
        <p style="font-size:12px;color:var(--text-soft);margin-top:8px">${err.message || err}</p>`;
     return;
   }
+  if (p.__missing) {
+    document.getElementById('modal-none').classList.remove('hidden');
+    document.getElementById('modal-none').innerHTML =
+      `<p>No profile data for <b>${name}</b> in this competition.<br>` +
+      `They may not meet the minimum-activity thresholds (5 innings batted or 30 balls bowled).</p>`;
+    return;
+  }
 
+  // ── Phase 1: paint stats immediately (cheap, ~0ms) ──────────────
+  // Fill headline stat tiles first so the modal feels responsive while
+  // Plotly (the expensive bit) spins up in a deferred frame below.
   if (p.batting) {
     document.getElementById('modal-batting').classList.remove('hidden');
     const b = p.batting;
@@ -2194,29 +2233,7 @@ async function openPlayer(name) {
       <div class="stat"><div class="stat-label">50s/100s</div><div class="stat-value">${b.fifties}/${b.hundreds}</div></div>
       <div class="stat"><div class="stat-label">Matches</div><div class="stat-value">${b.matches}</div></div>
       ${caisStat}`;
-
-    const seas = p.batting_seasons || [];
-    Plotly.newPlot('modal-bat-seasons', [{
-      type: 'bar',
-      x: seas.map(s => s.season),
-      y: seas.map(s => s.runs),
-      marker: { color: PAL.amber },
-      hovertemplate: '<b>%{x}</b><br>Runs: %{y}<extra></extra>',
-    }], { ...BASE, xaxis: { ...AXIS }, yaxis: { ...AXIS, title: 'Runs' },
-          height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
-
-    const inn = p.innings_list || [];
-    Plotly.newPlot('modal-bat-innings', [{
-      type: 'bar',
-      x: inn.map(i => i.inning_num),
-      y: inn.map(i => i.runs),
-      marker: { color: inn.map(i => i.dismissed ? PAL.rose : PAL.emerald) },
-      hovertemplate: '<b>Inn %{x}</b><br>Runs: %{y}<extra></extra>',
-    }], { ...BASE, xaxis: { ...AXIS, title: 'Innings #' },
-          yaxis: { ...AXIS, title: 'Runs' },
-          height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
   }
-
   if (p.bowling) {
     document.getElementById('modal-bowling').classList.remove('hidden');
     const b = p.bowling;
@@ -2231,21 +2248,52 @@ async function openPlayer(name) {
       <div class="stat"><div class="stat-label">Average</div> <div class="stat-value">${b.average ?? '—'}</div></div>
       <div class="stat"><div class="stat-label">Matches</div> <div class="stat-value">${b.matches}</div></div>
       ${caisBowlStat}`;
-
-    const seas = p.bowling_seasons || [];
-    Plotly.newPlot('modal-bowl-seasons', [{
-      type: 'bar',
-      x: seas.map(s => s.season),
-      y: seas.map(s => s.wickets),
-      marker: { color: PAL.rose },
-      hovertemplate: '<b>%{x}</b><br>Wkts: %{y}<extra></extra>',
-    }], { ...BASE, xaxis: { ...AXIS }, yaxis: { ...AXIS, title: 'Wickets' },
-          height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
   }
-
   if (!p.batting && !p.bowling) {
     document.getElementById('modal-none').classList.remove('hidden');
   }
+
+  // ── Phase 2: defer the Plotly renders to the next frame ────────
+  // newPlot blocks the main thread for ~50–200ms on big innings lists.
+  // Yielding first lets the stats above paint immediately — the user
+  // sees numbers before the charts fade in a few ms later.
+  // Plotly.react is a drop-in for newPlot that diff-renders when the
+  // target div already has a chart, so reopening the modal is faster.
+  requestAnimationFrame(() => {
+    if (p.batting) {
+      const seas = p.batting_seasons || [];
+      Plotly.react('modal-bat-seasons', [{
+        type: 'bar',
+        x: seas.map(s => s.season),
+        y: seas.map(s => s.runs),
+        marker: { color: PAL.amber },
+        hovertemplate: '<b>%{x}</b><br>Runs: %{y}<extra></extra>',
+      }], { ...BASE, xaxis: { ...AXIS }, yaxis: { ...AXIS, title: 'Runs' },
+            height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
+
+      const inn = p.innings_list || [];
+      Plotly.react('modal-bat-innings', [{
+        type: 'bar',
+        x: inn.map(i => i.inning_num),
+        y: inn.map(i => i.runs),
+        marker: { color: inn.map(i => i.dismissed ? PAL.rose : PAL.emerald) },
+        hovertemplate: '<b>Inn %{x}</b><br>Runs: %{y}<extra></extra>',
+      }], { ...BASE, xaxis: { ...AXIS, title: 'Innings #' },
+            yaxis: { ...AXIS, title: 'Runs' },
+            height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
+    }
+    if (p.bowling) {
+      const seas = p.bowling_seasons || [];
+      Plotly.react('modal-bowl-seasons', [{
+        type: 'bar',
+        x: seas.map(s => s.season),
+        y: seas.map(s => s.wickets),
+        marker: { color: PAL.rose },
+        hovertemplate: '<b>%{x}</b><br>Wkts: %{y}<extra></extra>',
+      }], { ...BASE, xaxis: { ...AXIS }, yaxis: { ...AXIS, title: 'Wickets' },
+            height: 280, margin: { l: 50, r: 15, t: 15, b: 40 } }, CFG);
+    }
+  });
 }
 
 document.getElementById('modal-close').onclick =
@@ -2372,6 +2420,10 @@ async function selectComp(code) {
   PLAYERS = [];
   SEASONS = [];
   TEAMS = [];
+  // Drop every cached player profile from the previous comp. Keys are
+  // "<comp>:<name>" so strictly we'd only need to drop the old comp's,
+  // but a full wipe is simpler and memory is not a concern.
+  for (const k of Object.keys(PROFILE_CACHE)) delete PROFILE_CACHE[k];
 
   renderCompGrid();
   updateCompBadge();
